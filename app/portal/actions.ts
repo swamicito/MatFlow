@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentStudentIdentity } from "@/lib/auth/current-student";
+import { waiverTypeLabel } from "@/lib/students";
 import type { BeltRank } from "@/lib/supabase/types";
 
 // ─────────────────────────────────────────────
@@ -445,4 +448,190 @@ export async function createProductCheckout(
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "Unknown error." };
   }
+}
+
+// ─────────────────────────────────────────────
+// Waivers
+// ─────────────────────────────────────────────
+
+export type PortalWaiver = {
+  id: string;
+  waiver_type: string;
+  signed_at: string;
+  signed_by_name: string | null;
+  pdf_url: string | null;
+  signature_data: string | null;
+};
+
+export type PortalWaiverTemplate = {
+  id: string;
+  name: string;
+  required: boolean;
+  pdf_template_url: string | null;
+  /** True when the student already has a waiver whose type matches this template. */
+  signed: boolean;
+};
+
+export async function getPortalWaivers(studentId: string): Promise<{
+  templates: PortalWaiverTemplate[];
+  signedWaivers: PortalWaiver[];
+  gymId: string | null;
+}> {
+  const admin = createAdminClient() as any;
+
+  const { data: student } = await admin
+    .from("students")
+    .select("gym_id")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  const gymId: string | null = student?.gym_id ?? null;
+
+  const { data: waiverRows } = await admin
+    .from("waivers")
+    .select("id, waiver_type, signed_at, signed_by_name, pdf_url, signature_data")
+    .eq("student_id", studentId)
+    .order("signed_at", { ascending: false });
+
+  const signedWaivers: PortalWaiver[] = (waiverRows ?? []).map((w: any) => ({
+    id: w.id,
+    waiver_type: w.waiver_type,
+    signed_at: w.signed_at,
+    signed_by_name: w.signed_by_name ?? null,
+    pdf_url: w.pdf_url ?? null,
+    signature_data: w.signature_data ?? null,
+  }));
+
+  const signedLabels = new Set(
+    signedWaivers.map((w) => waiverTypeLabel(w.waiver_type).toLowerCase()),
+  );
+  const signedKeys = new Set(signedWaivers.map((w) => w.waiver_type.toLowerCase()));
+
+  const templates: PortalWaiverTemplate[] = [];
+  if (gymId) {
+    const { data: tmplRows } = await admin
+      .from("waiver_templates")
+      .select("id, name, required, pdf_template_url")
+      .eq("gym_id", gymId)
+      .order("required", { ascending: false })
+      .order("created_at", { ascending: true });
+
+    for (const t of tmplRows ?? []) {
+      const nameLow = (t.name as string).toLowerCase();
+      templates.push({
+        id: t.id,
+        name: t.name,
+        required: t.required,
+        pdf_template_url: t.pdf_template_url ?? null,
+        signed: signedLabels.has(nameLow) || signedKeys.has(nameLow),
+      });
+    }
+  }
+
+  return { templates, signedWaivers, gymId };
+}
+
+export async function savePortalWaiver(input: {
+  template_name: string;
+  signature_data: string;
+  signed_by_name?: string | null;
+}): Promise<{ ok: true; waiver_id: string } | { ok: false; error: string }> {
+  const identity = await getCurrentStudentIdentity();
+  if (!identity) return { ok: false, error: "Not authenticated." };
+
+  if (!input.signature_data?.startsWith("data:image/")) {
+    return { ok: false, error: "Signature is empty or invalid." };
+  }
+  if (input.signature_data.length > 1_500_000) {
+    return { ok: false, error: "Signature image too large." };
+  }
+
+  const admin = createAdminClient() as any;
+  const studentId = identity.studentId;
+
+  const { data, error } = await admin
+    .from("waivers")
+    .insert({
+      student_id: studentId,
+      waiver_type: input.template_name,
+      signature_data: input.signature_data,
+      signed_by_name: input.signed_by_name?.trim() || null,
+    })
+    .select("id, signed_at")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to save waiver." };
+  }
+
+  try {
+    const { data: studentRow } = await admin
+      .from("students")
+      .select("gym_id, full_name")
+      .eq("id", studentId)
+      .maybeSingle();
+
+    if (studentRow) {
+      const gymRes = await admin
+        .from("gyms")
+        .select("name")
+        .eq("id", studentRow.gym_id)
+        .maybeSingle();
+
+      const { data: templateRow } = await admin
+        .from("waiver_templates")
+        .select("id, pdf_template_url")
+        .eq("gym_id", studentRow.gym_id)
+        .ilike("name", input.template_name)
+        .not("pdf_template_url", "is", null)
+        .limit(1)
+        .maybeSingle();
+
+      let pdfTemplateBytes: Uint8Array | null = null;
+      if (templateRow?.id) {
+        const storagePath = `${studentRow.gym_id as string}/${templateRow.id as string}.pdf`;
+        const { data: fileBlob, error: dlErr } = await admin.storage
+          .from("waiver-templates")
+          .download(storagePath);
+        if (!dlErr && fileBlob) {
+          pdfTemplateBytes = new Uint8Array(await (fileBlob as Blob).arrayBuffer());
+        }
+      }
+
+      const { generateSignedWaiverPdf } = await import("@/lib/pdf/sign-waiver");
+      const pdfBytes = await generateSignedWaiverPdf({
+        signatureDataUrl: input.signature_data,
+        signerName: input.signed_by_name?.trim() || (studentRow.full_name as string),
+        signedAt: data.signed_at as string,
+        waiverType: waiverTypeLabel(input.template_name),
+        gymName: (gymRes?.data?.name as string | null) ?? null,
+        pdfTemplateBytes,
+      });
+
+      await admin.storage
+        .createBucket("signed-waivers", { public: true })
+        .catch(() => {});
+      const pdfPath = `${studentRow.gym_id as string}/${studentId}/${data.id as string}.pdf`;
+      const { error: uploadErr } = await admin.storage
+        .from("signed-waivers")
+        .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+
+      if (!uploadErr) {
+        const { data: urlData } = admin.storage
+          .from("signed-waivers")
+          .getPublicUrl(pdfPath);
+        if (urlData?.publicUrl) {
+          await admin
+            .from("waivers")
+            .update({ pdf_url: urlData.publicUrl })
+            .eq("id", data.id);
+        }
+      }
+    }
+  } catch {
+    // PDF generation is non-critical — waiver record already saved
+  }
+
+  revalidatePath("/portal/waivers");
+  return { ok: true, waiver_id: data.id as string };
 }

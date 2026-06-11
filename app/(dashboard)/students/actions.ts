@@ -450,13 +450,37 @@ async function generateAndStoreSignedPdf(
     .eq("id", student.gym_id)
     .maybeSingle();
 
+  // Look up the best-matching waiver template and download its PDF bytes via
+  // the admin storage client (avoids public-URL auth failures on private buckets).
+  const typeLabel = waiverTypeLabel(opts.waiverType);
+  const { data: templateRow } = await supabase
+    .from("waiver_templates")
+    .select("id, pdf_template_url")
+    .eq("gym_id", student.gym_id)
+    .ilike("name", typeLabel)
+    .not("pdf_template_url", "is", null)
+    .limit(1)
+    .maybeSingle();
+
+  let pdfTemplateBytes: Uint8Array | null = null;
+  if (templateRow?.id) {
+    const storagePath = `${student.gym_id as string}/${templateRow.id as string}.pdf`;
+    const { data: fileBlob, error: dlErr } = await supabase.storage
+      .from("waiver-templates")
+      .download(storagePath);
+    if (!dlErr && fileBlob) {
+      pdfTemplateBytes = new Uint8Array(await (fileBlob as Blob).arrayBuffer());
+    }
+  }
+
   const { generateSignedWaiverPdf } = await import("@/lib/pdf/sign-waiver");
   const pdfBytes = await generateSignedWaiverPdf({
     signatureDataUrl: opts.signatureData,
     signerName: opts.signedByName ?? (student.full_name as string),
     signedAt: opts.signedAt,
-    waiverType: waiverTypeLabel(opts.waiverType),
+    waiverType: typeLabel,
     gymName: (gymRes?.data?.name as string | null) ?? null,
+    pdfTemplateBytes,
   });
 
   await supabase.storage
