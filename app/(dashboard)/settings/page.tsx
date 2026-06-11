@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Building2,
   Database,
+  FileSignature,
   FileSpreadsheet,
   Palette,
   Plus,
@@ -104,6 +105,15 @@ const TILES: Tile[] = [
     icon: ShoppingBag,
     cta: "Manage products",
     requires: "edit_shop",
+  },
+  {
+    href: "/settings/waivers",
+    title: "Digital Waivers",
+    description:
+      "Create waiver templates, mark which are required, and upload PDF forms. View and download every signed waiver across all students in one place.",
+    icon: FileSignature,
+    cta: "Manage waivers",
+    requires: "edit_settings",
   },
   {
     href: "/settings/challenges",
