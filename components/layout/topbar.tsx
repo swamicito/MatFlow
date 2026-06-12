@@ -173,14 +173,9 @@ export function Topbar({
         <div className="absolute left-0 top-0 bottom-0 w-72 bg-[#050505] border-r border-[#1f1f1f] flex flex-col shadow-2xl">
           {/* Header */}
           <div className="h-16 flex items-center justify-between px-5 border-b border-[#1a1a1a] shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-sm bg-white text-black grid place-items-center text-xs font-bold tracking-tighter">
-                M
-              </div>
-              <span className="text-sm font-semibold tracking-wide uppercase text-white">
-                MatFlow
-              </span>
-            </div>
+            <Link href="/dashboard" onClick={() => setDrawerOpen(false)}>
+              <img src="/logo-full.png" alt="MatFlow" className="h-6 w-auto" />
+            </Link>
             <button
               onClick={() => setDrawerOpen(false)}
               className="h-8 w-8 grid place-items-center rounded-xl text-[#555] hover:text-white hover:bg-[#1a1a1a] transition-colors"

@@ -19,11 +19,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-black flex items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
         <div className="mb-10">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center">
-              <span className="text-black font-bold text-3xl tracking-tighter">M</span>
-            </div>
-            <span className="text-4xl font-semibold tracking-tight text-white">MATFLOW</span>
+          <div className="flex justify-center mb-4">
+            <img src="/logo-full.png" alt="MatFlow" className="h-12 w-auto" />
           </div>
           <h1 className="text-4xl font-semibold tracking-tight text-white mb-3">Student Portal</h1>
           <p className="text-[#888]">Demo • Asbury Park Jiu-Jitsu</p>

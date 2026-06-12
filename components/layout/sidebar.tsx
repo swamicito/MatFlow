@@ -15,13 +15,8 @@ export function Sidebar({ role }: { role: UserRole }) {
   return (
     <aside className="hidden md:flex md:flex-col w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-sm bg-white text-black grid place-items-center text-xs font-bold tracking-tighter">
-            M
-          </div>
-          <span className="text-sm font-semibold tracking-wide uppercase">
-            MatFlow
-          </span>
+        <Link href="/dashboard">
+          <img src="/logo-full.png" alt="MatFlow" className="h-7 w-auto" />
         </Link>
       </div>
 

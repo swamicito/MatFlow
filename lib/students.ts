@@ -1,11 +1,15 @@
 import type { BeltRank, StudentStatus } from "@/lib/supabase/types";
 
 /**
- * Adult belt ranks (BJJ). The DB enum also includes the youth belts
- * (gray/yellow/orange/green) but the Students UI only exposes adult belts.
+ * Full belt progression (BJJ) — adult + youth belts in logical order.
+ * Used to populate dropdowns and validate belt updates.
  */
 export const ADULT_BELTS: BeltRank[] = [
   "white",
+  "gray",
+  "yellow",
+  "orange",
+  "green",
   "blue",
   "purple",
   "brown",

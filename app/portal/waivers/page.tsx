@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { getCurrentStudentIdentity } from "@/lib/auth/current-student";
 import { getPortalWaivers } from "../actions";
 import { PortalWaivers } from "@/components/portal/portal-waivers";
@@ -9,7 +8,12 @@ export const metadata = { title: "Waivers · MatFlow Portal" };
 
 export default async function PortalWaiversPage() {
   const identity = await getCurrentStudentIdentity();
-  if (!identity) redirect("/login");
+
+  if (!identity) {
+    return (
+      <PortalWaivers templates={[]} signedWaivers={[]} studentName="" />
+    );
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
