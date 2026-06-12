@@ -16,7 +16,7 @@ export function Sidebar({ role }: { role: UserRole }) {
     <aside className="hidden md:flex md:flex-col w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
         <Link href="/dashboard">
-          <img src="/logo-full.png" alt="MatFlow" className="h-7 w-auto" />
+          <img src="/logo-full.png" alt="MatFlow" className="h-9 w-auto" />
         </Link>
       </div>
 

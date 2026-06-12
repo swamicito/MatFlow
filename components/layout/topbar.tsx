@@ -174,7 +174,7 @@ export function Topbar({
           {/* Header */}
           <div className="h-16 flex items-center justify-between px-5 border-b border-[#1a1a1a] shrink-0">
             <Link href="/dashboard" onClick={() => setDrawerOpen(false)}>
-              <img src="/logo-full.png" alt="MatFlow" className="h-6 w-auto" />
+              <img src="/logo-full.png" alt="MatFlow" className="h-8 w-auto" />
             </Link>
             <button
               onClick={() => setDrawerOpen(false)}

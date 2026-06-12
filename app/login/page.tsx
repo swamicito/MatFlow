@@ -21,7 +21,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md text-center">
         <div className="mb-10">
           <div className="flex justify-center mb-4">
-            <img src="/logo-full.png" alt="MatFlow" className="h-16 md:h-20 w-auto" />
+            <img src="/logo-full.png" alt="MatFlow" className="h-20 md:h-24 w-auto" />
           </div>
           <h1 className="text-4xl font-semibold tracking-tight text-white mb-3">Student Portal</h1>
           <p className="text-[#888]">Demo Mode • Asbury Park Jiu-Jitsu</p>
