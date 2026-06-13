@@ -36,7 +36,8 @@ export function Sidebar({ role }: { role: UserRole }) {
               )}
             >
               <Icon className="h-4 w-4" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.rightIcon && <item.rightIcon className="h-3.5 w-3.5 opacity-40" />}
             </Link>
           );
         })}

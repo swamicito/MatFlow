@@ -1,13 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { TabletClient } from "@/components/tablet/tablet-client";
+import { FrontdeskClient } from "@/components/frontdesk/frontdesk-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
-import type { CheckinStudent, RecentCheckin } from "@/app/checkin/page";
+import type { Database } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Front Desk · MatFlow" };
 
-export type TabletClass = {
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type Student = Database["public"]["Tables"]["students"]["Row"];
+
+export type FrontdeskClass = {
   id: string;
   title: string;
   instructor_name: string;
@@ -15,21 +19,40 @@ export type TabletClass = {
   end_time: string;
 };
 
+export type CheckinStudent = Pick<
+  Student,
+  "id" | "full_name" | "phone" | "belt_rank" | "status"
+> & {
+  last_checked_in_at: string | null;
+};
+
+export type RecentCheckin = {
+  attendance_id: string;
+  student_id: string;
+  student_name: string;
+  class_type: string | null;
+  checked_in_at: string;
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default async function TabletPage() {
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function FrontdeskPage() {
   const supabase = createAdminClient() as any;
   const gymId = await getCurrentGymId();
 
-  const todayDow = new Date().getDay(); // 0=Sun…6=Sat
+  const todayDow = new Date().getDay();
   const iso = todayIso();
   const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
   let students: CheckinStudent[] = [];
-  let todaysClasses: TabletClass[] = [];
+  let todaysClasses: FrontdeskClass[] = [];
   let recentCheckins: RecentCheckin[] = [];
   let todayCount = 0;
   let activeStudents = 0;
@@ -111,7 +134,7 @@ export default async function TabletPage() {
   }
 
   return (
-    <TabletClient
+    <FrontdeskClient
       students={students}
       todaysClasses={todaysClasses}
       recentCheckins={recentCheckins}

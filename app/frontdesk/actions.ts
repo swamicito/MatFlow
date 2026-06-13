@@ -11,9 +11,7 @@ export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? object : { data: T }))
   | { ok: false; error: string };
 
-
 function todayIsoDate(): string {
-  // YYYY-MM-DD in local time
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -61,10 +59,9 @@ export async function checkInStudent(
     return { ok: false, error: error?.message ?? "Insert failed." };
   }
 
-  // Best-effort: deduct one class credit if the student has a pack balance.
-  await deductClassCredit(student.id).catch(() => {/* table may not exist yet — safe to ignore */});
+  await deductClassCredit(student.id).catch(() => {/* safe to ignore */});
 
-  revalidatePath("/checkin");
+  revalidatePath("/frontdesk");
   return {
     ok: true,
     data: { attendance_id: row.id, student_name: student.full_name },
@@ -93,7 +90,7 @@ export async function walkInCheckIn(
       phone: phone.trim() || null,
       status: "trial",
       belt_rank: "white",
-      notes: "Walk-in from tablet check-in.",
+      notes: "Walk-in from front desk kiosk.",
     })
     .select("id, full_name")
     .single();
@@ -124,7 +121,7 @@ export async function walkInCheckIn(
 
   if (attErr) return { ok: false, error: attErr.message };
 
-  revalidatePath("/checkin");
+  revalidatePath("/frontdesk");
   revalidatePath("/students");
   return {
     ok: true,

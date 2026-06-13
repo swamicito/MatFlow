@@ -7,6 +7,8 @@ import {
   BarChart3,
   Settings,
   MessageSquare,
+  MonitorSmartphone,
+  Tablet,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/permissions";
@@ -16,6 +18,7 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   requires: Permission;
+  rightIcon?: LucideIcon;
 };
 
 export const navItems: NavItem[] = [
@@ -27,4 +30,5 @@ export const navItems: NavItem[] = [
   { label: "Reports", href: "/reports", icon: BarChart3, requires: "view_reports" },
   { label: "Messages", href: "/messages", icon: MessageSquare, requires: "view_messages" },
   { label: "Settings", href: "/settings", icon: Settings, requires: "view_settings" },
+  { label: "Front Desk", href: "/frontdesk", icon: MonitorSmartphone, requires: "view_checkin", rightIcon: Tablet },
 ];

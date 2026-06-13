@@ -17,14 +17,13 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkInStudent, walkInCheckIn } from "@/app/checkin/actions";
+import { checkInStudent, walkInCheckIn } from "@/app/frontdesk/actions";
 import { createStudent } from "@/app/(dashboard)/students/actions";
 import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
 import { BeltBadge } from "@/components/students/belt-badge";
-import type { CheckinStudent, RecentCheckin } from "@/app/checkin/page";
+import type { CheckinStudent, RecentCheckin, FrontdeskClass } from "@/app/frontdesk/page";
 import type { BeltRank } from "@/lib/supabase/types";
-import type { TabletClass } from "@/app/tablet/page";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -51,7 +50,7 @@ function LiveClock({ date }: { date: Date }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function TabletClient({
+export function FrontdeskClient({
   students,
   todaysClasses,
   recentCheckins,
@@ -59,7 +58,7 @@ export function TabletClient({
   gymName,
 }: {
   students: CheckinStudent[];
-  todaysClasses: TabletClass[];
+  todaysClasses: FrontdeskClass[];
   recentCheckins: RecentCheckin[];
   stats: { todayCount: number; activeStudents: number };
   gymName: string;
@@ -182,7 +181,7 @@ export function TabletClient({
     { id: "new-client", label: "New Client",         icon: Plus     },
   ];
 
-  // ───────────────────────────────────────────────────────────────── render
+  // ─────────────────────────────────────────────────────────── render
 
   return (
     <div className="h-screen bg-black text-white flex flex-col overflow-hidden select-none">
@@ -304,9 +303,7 @@ export function TabletClient({
                             {s.full_name}
                           </p>
                           <p className="text-xs text-[#555] truncate">
-                            {s.phone
-                              ? `${s.phone}  ·  `
-                              : ""}
+                            {s.phone ? `${s.phone}  ·  ` : ""}
                             {s.last_checked_in_at
                               ? `Last in ${relativeTime(s.last_checked_in_at)}`
                               : "No prior check-ins"}
@@ -508,10 +505,10 @@ export function TabletClient({
               <p className="text-[9px] uppercase tracking-widest text-[#444] mb-3">Quick Links</p>
               <div className="space-y-2">
                 {[
-                  { href: "/students",  label: "Student Directory" },
-                  { href: "/leads",     label: "Leads" },
-                  { href: "/schedule",  label: "Full Schedule" },
-                  { href: "/billing",   label: "Billing" },
+                  { href: "/students", label: "Student Directory" },
+                  { href: "/leads",    label: "Leads"             },
+                  { href: "/schedule", label: "Full Schedule"     },
+                  { href: "/billing",  label: "Billing"           },
                 ].map(({ href, label }) => (
                   <Link
                     key={href}

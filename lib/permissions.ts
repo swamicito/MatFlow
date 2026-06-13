@@ -177,7 +177,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; perm: Permission }[] = [
   { prefix: "/leads", perm: "view_leads" },
   { prefix: "/billing", perm: "view_billing" },
   { prefix: "/reports", perm: "view_reports" },
-  { prefix: "/checkin", perm: "view_checkin" },
+  { prefix: "/frontdesk", perm: "view_checkin" },
   { prefix: "/settings/automation", perm: "view_automation" },
   { prefix: "/settings/import", perm: "view_import" },
   { prefix: "/settings/team", perm: "view_team" },
