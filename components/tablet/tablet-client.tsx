@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { checkInStudent, walkInCheckIn } from "@/app/checkin/actions";
 import { createStudent } from "@/app/(dashboard)/students/actions";
-import { CLASS_TYPES, DEFAULT_CLASS, relativeTime, type ClassType } from "@/lib/checkin";
+import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
 import { BeltBadge } from "@/components/students/belt-badge";
 import type { CheckinStudent, RecentCheckin } from "@/app/checkin/page";
@@ -67,7 +67,6 @@ export function TabletClient({
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
-  const [classType, setClassType] = useState<ClassType>(DEFAULT_CLASS);
   const [pending, startTransition] = useTransition();
   const [success, setSuccess] = useState<{ name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +130,7 @@ export function TabletClient({
     if (pending) return;
     setError(null);
     startTransition(async () => {
-      const r = await checkInStudent(studentId, classType);
+      const r = await checkInStudent(studentId, DEFAULT_CLASS);
       if (!r.ok) { setError(r.error); return; }
       setSuccess({ name: r.data.student_name });
       setQuery("");
@@ -143,7 +142,7 @@ export function TabletClient({
     if (!wiName.trim()) { setError("Name is required."); return; }
     setError(null);
     startTransition(async () => {
-      const r = await walkInCheckIn(wiName, wiPhone, classType);
+      const r = await walkInCheckIn(wiName, wiPhone, DEFAULT_CLASS);
       if (!r.ok) { setError(r.error); return; }
       setSuccess({ name: r.data.student_name });
       setWiName(""); setWiPhone("");
@@ -203,12 +202,6 @@ export function TabletClient({
             <LiveClock date={now} />
           </p>
           <Link
-            href="/checkin"
-            className="h-9 px-4 rounded-xl border border-[#222] text-xs text-[#888] hover:text-white hover:border-[#333] transition-colors inline-flex items-center gap-2"
-          >
-            Check-In Kiosk
-          </Link>
-          <Link
             href="/dashboard"
             className="h-9 px-4 rounded-xl border border-[#222] text-xs text-[#888] hover:text-white hover:border-[#333] transition-colors inline-flex items-center gap-2"
           >
@@ -224,30 +217,8 @@ export function TabletClient({
         {/* ── Left column ── */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-[#1a1a1a]">
 
-          {/* Class type + mode switcher */}
-          <div className="shrink-0 px-6 pt-5 pb-4 space-y-3 border-b border-[#111]">
-            {/* Class type pills */}
-            <div className="flex flex-wrap gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-[#555] self-center mr-1">
-                Class:
-              </span>
-              {CLASS_TYPES.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setClassType(c)}
-                  className={cn(
-                    "h-8 px-4 rounded-full text-xs font-semibold border transition-colors",
-                    classType === c
-                      ? "bg-white text-black border-white"
-                      : "border-[#222] text-[#777] hover:text-white hover:border-[#333]",
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-
-            {/* Mode buttons */}
+          {/* Mode switcher */}
+          <div className="shrink-0 px-6 pt-5 pb-5 border-b border-[#111]">
             <div className="grid grid-cols-3 gap-3">
               {MODES.map(({ id, label, icon: Icon }) => (
                 <button
@@ -388,7 +359,7 @@ export function TabletClient({
                     ? <Loader2 className="h-5 w-5 animate-spin" />
                     : <Check className="h-5 w-5" strokeWidth={3} />
                   }
-                  Walk-In Check In · {classType}
+                  Walk-In Check In
                 </button>
               </div>
             )}
@@ -566,7 +537,7 @@ export function TabletClient({
             </div>
             <div>
               <p className="text-5xl font-bold tracking-tight text-white">{success.name}</p>
-              <p className="text-xl text-[#888] mt-3">Checked in · {classType}</p>
+              <p className="text-xl text-[#888] mt-3">Checked in successfully</p>
             </div>
           </div>
         </div>
