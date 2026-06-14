@@ -41,6 +41,12 @@ export type TodayCheckin = {
   checked_in_at: string;
 };
 
+export type WaiverTemplate = {
+  id: string;
+  name: string;
+  required: boolean;
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayIso(): string {
@@ -62,12 +68,13 @@ export default async function FrontdeskPage() {
   let todaysClasses: FrontdeskClass[] = [];
   let recentCheckins: RecentCheckin[] = [];
   let todayCheckins: TodayCheckin[] = [];
+  let waiverTemplates: WaiverTemplate[] = [];
   let todayCount = 0;
   let activeStudents = 0;
   let gymName = "MatFlow";
 
   if (gymId) {
-    const [gymRes, studentsRes, classesRes] = await Promise.all([
+    const [gymRes, studentsRes, classesRes, templatesRes] = await Promise.all([
       supabase.from("gyms").select("name").eq("id", gymId).maybeSingle(),
       supabase
         .from("students")
@@ -81,10 +88,21 @@ export default async function FrontdeskPage() {
         .eq("gym_id", gymId)
         .eq("day_of_week", todayDow)
         .order("start_time"),
+      supabase
+        .from("waiver_templates")
+        .select("id, name, required")
+        .eq("gym_id", gymId)
+        .order("required", { ascending: false })
+        .order("name"),
     ]);
 
     gymName = gymRes.data?.name ?? gymName;
     todaysClasses = classesRes.data ?? [];
+    waiverTemplates = (templatesRes.data ?? []).map((t: any) => ({
+      id: t.id as string,
+      name: t.name as string,
+      required: Boolean(t.required),
+    }));
 
     const studentRows: any[] = studentsRes.data ?? [];
     const studentIds: string[] = studentRows.map((s) => s.id);
@@ -155,6 +173,7 @@ export default async function FrontdeskPage() {
       todaysClasses={todaysClasses}
       recentCheckins={recentCheckins}
       todayCheckins={todayCheckins}
+      waiverTemplates={waiverTemplates}
       stats={{ todayCount, activeStudents }}
       gymName={gymName}
     />

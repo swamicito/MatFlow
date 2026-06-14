@@ -32,7 +32,7 @@ export type CreateStudentInput = {
 
 export async function createStudent(
   input: CreateStudentInput,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ id: string; name: string }>> {
   if (!input.full_name?.trim()) {
     return { ok: false, error: "Full name is required." };
   }
@@ -78,7 +78,7 @@ export async function createStudent(
     );
 
   revalidatePath("/students");
-  return { ok: true };
+  return { ok: true, data: { id: student.id as string, name: input.full_name.trim() } };
 }
 
 // ───────────────────────── Update Belt Progress ─────────────────────────
@@ -485,9 +485,10 @@ export async function removeStudentFromFamily(
 
 export type SaveWaiverInput = {
   student_id: string;
-  waiver_type: WaiverType;
-  signature_data: string; // full data URL: "data:image/png;base64,..."
+  waiver_type: string;          // WaiverType enum OR a custom template name
+  signature_data: string;       // full data URL: "data:image/png;base64,..."
   signed_by_name?: string | null;
+  template_id?: string | null;  // when present: direct template lookup (skips ilike match)
 };
 
 export async function saveWaiver(
@@ -497,7 +498,12 @@ export async function saveWaiver(
   if (!input.signature_data?.startsWith("data:image/")) {
     return { ok: false, error: "Signature is empty or invalid." };
   }
-  if (!(WAIVER_TYPES as readonly string[]).includes(input.waiver_type)) {
+  if (!input.waiver_type?.trim()) {
+    return { ok: false, error: "Waiver type is required." };
+  }
+  // Validate against the known enum only when no explicit template_id is provided.
+  // With a template_id the caller may pass the template's custom name as waiver_type.
+  if (!input.template_id && !(WAIVER_TYPES as readonly string[]).includes(input.waiver_type)) {
     return { ok: false, error: "Invalid waiver type." };
   }
   // Reasonable cap (~1 MB after base64) to avoid runaway payloads.
@@ -548,6 +554,7 @@ export async function saveWaiver(
       signedByName: input.signed_by_name?.trim() || null,
       signedAt: data.signed_at as string,
       waiverType: input.waiver_type,
+      templateId: input.template_id ?? null,
     });
     if (pdfUrl) {
       await supabase.from("waivers").update({ pdf_url: pdfUrl }).eq("id", data.id);
@@ -572,6 +579,7 @@ async function generateAndStoreSignedPdf(
     signedByName: string | null;
     signedAt: string;
     waiverType: string;
+    templateId?: string | null;
   },
 ): Promise<string | null> {
   const studentRes = await supabase
@@ -588,17 +596,31 @@ async function generateAndStoreSignedPdf(
     .eq("id", student.gym_id)
     .maybeSingle();
 
-  // Look up the best-matching waiver template and download its PDF bytes via
-  // the admin storage client (avoids public-URL auth failures on private buckets).
+  // Look up the template PDF.
+  // P2 fix: when templateId is provided use a direct id+gym ownership query;
+  // fall back to the ilike name match only for legacy / non-template-linked calls.
   const typeLabel = waiverTypeLabel(opts.waiverType);
-  const { data: templateRow } = await supabase
-    .from("waiver_templates")
-    .select("id, pdf_template_url")
-    .eq("gym_id", student.gym_id)
-    .ilike("name", typeLabel)
-    .not("pdf_template_url", "is", null)
-    .limit(1)
-    .maybeSingle();
+  let templateRow: { id: string; pdf_template_url: string | null } | null = null;
+  if (opts.templateId) {
+    const { data } = await supabase
+      .from("waiver_templates")
+      .select("id, pdf_template_url")
+      .eq("id", opts.templateId)
+      .eq("gym_id", student.gym_id)
+      .not("pdf_template_url", "is", null)
+      .maybeSingle();
+    templateRow = data ?? null;
+  } else {
+    const { data } = await supabase
+      .from("waiver_templates")
+      .select("id, pdf_template_url")
+      .eq("gym_id", student.gym_id)
+      .ilike("name", typeLabel)
+      .not("pdf_template_url", "is", null)
+      .limit(1)
+      .maybeSingle();
+    templateRow = data ?? null;
+  }
 
   let pdfTemplateBytes: Uint8Array | null = null;
   if (templateRow?.id) {

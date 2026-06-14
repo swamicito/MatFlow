@@ -18,16 +18,18 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkInStudent } from "@/app/frontdesk/actions";
-import { createStudent } from "@/app/(dashboard)/students/actions";
+import { createStudent, saveWaiver } from "@/app/(dashboard)/students/actions";
 import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
 import { BeltBadge } from "@/components/students/belt-badge";
-import type { CheckinStudent, RecentCheckin, FrontdeskClass, TodayCheckin } from "@/app/frontdesk/page";
+import { SignaturePad } from "@/components/students/signature-pad";
+import type { SignaturePadHandle } from "@/components/students/signature-pad";
+import type { CheckinStudent, RecentCheckin, FrontdeskClass, TodayCheckin, WaiverTemplate } from "@/app/frontdesk/page";
 import type { BeltRank } from "@/lib/supabase/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Mode = "search" | "new-client";
+type Mode = "search" | "new-client" | "sign-waiver";
 
 function fmtTime(t: string): string {
   const [hStr, mStr] = t.split(":");
@@ -55,6 +57,7 @@ export function FrontdeskClient({
   todaysClasses,
   recentCheckins,
   todayCheckins,
+  waiverTemplates,
   stats,
   gymName,
 }: {
@@ -62,6 +65,7 @@ export function FrontdeskClient({
   todaysClasses: FrontdeskClass[];
   recentCheckins: RecentCheckin[];
   todayCheckins: TodayCheckin[];
+  waiverTemplates: WaiverTemplate[];
   stats: { todayCount: number; activeStudents: number };
   gymName: string;
 }) {
@@ -81,6 +85,13 @@ export function FrontdeskClient({
     phone: "",
     belt: "white" as BeltRank,
   });
+
+  // Sign-waiver step (entered automatically after New Client creation)
+  const [pendingStudent, setPendingStudent] = useState<{ id: string; name: string } | null>(null);
+  const [waiverTemplateId, setWaiverTemplateId] = useState("");
+  const [swSignedByName, setSwSignedByName] = useState("");
+  const [swHasInk, setSwHasInk] = useState(false);
+  const swPadRef = useRef<SignaturePadHandle>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -148,8 +159,44 @@ export function FrontdeskClient({
         status: "active",
       });
       if (!r.ok) { setError(r.error); return; }
-      setSuccess({ name: nc.name });
+      // Transition to inline waiver step instead of immediate success overlay.
+      const defaultTpl = waiverTemplates.find((t) => t.required) ?? waiverTemplates[0];
+      setPendingStudent({ id: r.data.id, name: r.data.name });
+      setWaiverTemplateId(defaultTpl?.id ?? "");
+      setSwSignedByName(r.data.name);
+      setSwHasInk(false);
       setNc({ name: "", email: "", phone: "", belt: "white" });
+      switchMode("sign-waiver");
+      setTimeout(() => swPadRef.current?.clear(), 50);
+    });
+  }
+
+  function handleSkipWaiver() {
+    if (!pendingStudent) return;
+    setSuccess({ name: pendingStudent.name });
+    setPendingStudent(null);
+    switchMode("search");
+    router.refresh();
+  }
+
+  function handleSaveWaiver() {
+    if (!pendingStudent) return;
+    const dataUrl = swPadRef.current?.toDataURL();
+    if (!dataUrl) { setError("Please sign before saving."); return; }
+    setError(null);
+    const selectedTemplate = waiverTemplates.find((t) => t.id === waiverTemplateId);
+    startTransition(async () => {
+      const r = await saveWaiver({
+        student_id: pendingStudent.id,
+        waiver_type: selectedTemplate?.name ?? "general",
+        signature_data: dataUrl,
+        signed_by_name: swSignedByName || null,
+        template_id: waiverTemplateId || null,
+      });
+      if (!r.ok) { setError(r.error); return; }
+      setSuccess({ name: pendingStudent.name });
+      setPendingStudent(null);
+      setSwHasInk(false);
       switchMode("search");
       router.refresh();
     });
@@ -201,26 +248,41 @@ export function FrontdeskClient({
         {/* ── Left column ── */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-[#1a1a1a]">
 
-          {/* Mode switcher */}
-          <div className="shrink-0 px-6 pt-5 pb-5 border-b border-[#111]">
-            <div className="grid grid-cols-2 gap-3">
-              {MODES.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => switchMode(id)}
-                  className={cn(
-                    "h-14 rounded-2xl border text-sm font-semibold flex items-center justify-center gap-2.5 transition-all active:scale-[0.97]",
-                    mode === id
-                      ? "bg-white text-black border-white shadow-lg shadow-white/10"
-                      : "border-[#222] text-[#888] hover:text-white hover:border-[#333] bg-[#080808]",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </button>
-              ))}
+          {/* Mode switcher — replaced by a status banner during the sign-waiver step */}
+          {mode === "sign-waiver" && pendingStudent ? (
+            <div className="shrink-0 px-6 pt-5 pb-5 border-b border-[#111]">
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                <Check className="h-5 w-5 text-emerald-400 shrink-0" strokeWidth={2.5} />
+                <div>
+                  <p className="text-sm font-semibold text-white">Student created</p>
+                  <p className="text-sm text-[#777]">
+                    Collecting waiver for{" "}
+                    <span className="font-semibold text-white">{pendingStudent.name}</span>
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="shrink-0 px-6 pt-5 pb-5 border-b border-[#111]">
+              <div className="grid grid-cols-2 gap-3">
+                {MODES.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => switchMode(id)}
+                    className={cn(
+                      "h-14 rounded-2xl border text-sm font-semibold flex items-center justify-center gap-2.5 transition-all active:scale-[0.97]",
+                      mode === id
+                        ? "bg-white text-black border-white shadow-lg shadow-white/10"
+                        : "border-[#222] text-[#888] hover:text-white hover:border-[#333] bg-[#080808]",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Mode content area */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
@@ -354,6 +416,91 @@ export function FrontdeskClient({
                   }
                   Create Student
                 </button>
+              </div>
+            )}
+
+            {/* ── Sign-waiver step ── */}
+            {mode === "sign-waiver" && pendingStudent && (
+              <div className="max-w-lg space-y-5">
+
+                {/* Template selector */}
+                {waiverTemplates.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-widest text-[#555]">Waiver type</p>
+                    <select
+                      value={waiverTemplateId}
+                      onChange={(e) => setWaiverTemplateId(e.target.value)}
+                      className="w-full h-12 px-4 rounded-2xl bg-[#0a0a0a] border border-[#222] text-sm text-white outline-none focus:border-white/25 transition-colors appearance-none"
+                    >
+                      {waiverTemplates.map((t) => (
+                        <option key={t.id} value={t.id} className="bg-black">
+                          {t.name}{t.required ? " ★" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {waiverTemplates.some((t) => t.required) && (
+                      <p className="text-[11px] text-[#555]">★ Required by gym policy</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Signed by */}
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-widest text-[#555]">Signed by (full name)</p>
+                  <input
+                    value={swSignedByName}
+                    onChange={(e) => setSwSignedByName(e.target.value)}
+                    placeholder={pendingStudent.name}
+                    className="w-full h-12 px-5 rounded-2xl bg-[#0a0a0a] border border-[#222] text-base text-white placeholder:text-[#444] outline-none focus:border-white/25 transition-colors"
+                  />
+                </div>
+
+                {/* Signature pad */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] uppercase tracking-widest text-[#555]">Signature</p>
+                    <button
+                      type="button"
+                      onClick={() => { swPadRef.current?.clear(); setSwHasInk(false); }}
+                      disabled={!swHasInk}
+                      className="text-xs text-[#666] hover:text-white disabled:opacity-30 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <SignaturePad
+                    ref={swPadRef}
+                    heightClassName="h-44"
+                    onInkChange={setSwHasInk}
+                  />
+                  <p className="text-xs text-[#555]">
+                    By signing, the named individual acknowledges the gym&apos;s liability
+                    waiver and assumes responsibility for risk of participation.
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSkipWaiver}
+                    disabled={pending}
+                    className="flex-1 h-12 rounded-2xl border border-[#222] text-sm text-[#888] hover:text-white hover:border-[#333] transition-colors"
+                  >
+                    Skip for now
+                  </button>
+                  <button
+                    onClick={handleSaveWaiver}
+                    disabled={pending || !swHasInk}
+                    className="flex-1 h-12 rounded-2xl bg-white text-black text-sm font-bold hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {pending
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Check className="h-4 w-4" strokeWidth={3} />
+                    }
+                    Save Signature
+                  </button>
+                </div>
+
               </div>
             )}
           </div>

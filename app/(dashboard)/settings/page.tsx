@@ -202,6 +202,22 @@ export default async function SettingsPage() {
         </section>
       )}
 
+      {/* ── Platform Admin ── */}
+      <section className="rounded-xl border border-[#111] bg-[#050505] px-5 py-4 flex items-center gap-3">
+        <ShieldCheck className="h-4 w-4 text-[#333] shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-[#555]">Platform Admin</p>
+          <p className="text-[11px] text-[#333] mt-0.5">Create new gyms, view all locations, and switch between them.</p>
+        </div>
+        <Link
+          href="/admin"
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] text-[#444] hover:text-[#888] transition-colors"
+        >
+          Open
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {tiles.map((t) => {
           const Icon = t.icon;
