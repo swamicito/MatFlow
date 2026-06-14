@@ -34,6 +34,13 @@ export type RecentCheckin = {
   checked_in_at: string;
 };
 
+export type TodayCheckin = {
+  attendance_id: string;
+  student_name: string;
+  class_type: string | null;
+  checked_in_at: string;
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayIso(): string {
@@ -54,6 +61,7 @@ export default async function FrontdeskPage() {
   let students: CheckinStudent[] = [];
   let todaysClasses: FrontdeskClass[] = [];
   let recentCheckins: RecentCheckin[] = [];
+  let todayCheckins: TodayCheckin[] = [];
   let todayCount = 0;
   let activeStudents = 0;
   let gymName = "MatFlow";
@@ -83,7 +91,7 @@ export default async function FrontdeskPage() {
     activeStudents = studentRows.filter((s) => s.status === "active").length;
 
     if (studentIds.length > 0) {
-      const [attendanceRes, recentRes, countRes] = await Promise.all([
+      const [attendanceRes, recentRes, todayRes] = await Promise.all([
         supabase
           .from("attendance")
           .select("student_id, checked_in_at")
@@ -98,9 +106,10 @@ export default async function FrontdeskPage() {
           .limit(15),
         supabase
           .from("attendance")
-          .select("id", { count: "exact", head: true })
+          .select("id, student_id, class_type, checked_in_at")
           .in("student_id", studentIds)
-          .eq("class_date", iso),
+          .eq("class_date", iso)
+          .order("checked_in_at", { ascending: false }),
       ]);
 
       const latestByStudent: Record<string, string> = {};
@@ -127,7 +136,14 @@ export default async function FrontdeskPage() {
         checked_in_at: a.checked_in_at,
       }));
 
-      todayCount = countRes.count ?? 0;
+      const todayRows: any[] = todayRes.data ?? [];
+      todayCount = todayRows.length;
+      todayCheckins = todayRows.map((a: any) => ({
+        attendance_id: a.id,
+        student_name: nameById.get(a.student_id) ?? "Unknown",
+        class_type: a.class_type,
+        checked_in_at: a.checked_in_at,
+      }));
     } else {
       students = studentRows.map((s) => ({ ...s, last_checked_in_at: null }));
     }
@@ -138,6 +154,7 @@ export default async function FrontdeskPage() {
       students={students}
       todaysClasses={todaysClasses}
       recentCheckins={recentCheckins}
+      todayCheckins={todayCheckins}
       stats={{ todayCount, activeStudents }}
       gymName={gymName}
     />

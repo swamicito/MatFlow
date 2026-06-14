@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Search,
-  UserPlus,
   Plus,
   X,
   Check,
@@ -15,19 +14,20 @@ import {
   ArrowLeft,
   Users,
   LayoutDashboard,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkInStudent, walkInCheckIn } from "@/app/frontdesk/actions";
+import { checkInStudent } from "@/app/frontdesk/actions";
 import { createStudent } from "@/app/(dashboard)/students/actions";
 import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
 import { BeltBadge } from "@/components/students/belt-badge";
-import type { CheckinStudent, RecentCheckin, FrontdeskClass } from "@/app/frontdesk/page";
+import type { CheckinStudent, RecentCheckin, FrontdeskClass, TodayCheckin } from "@/app/frontdesk/page";
 import type { BeltRank } from "@/lib/supabase/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Mode = "search" | "walkin" | "new-client";
+type Mode = "search" | "new-client";
 
 function fmtTime(t: string): string {
   const [hStr, mStr] = t.split(":");
@@ -54,12 +54,14 @@ export function FrontdeskClient({
   students,
   todaysClasses,
   recentCheckins,
+  todayCheckins,
   stats,
   gymName,
 }: {
   students: CheckinStudent[];
   todaysClasses: FrontdeskClass[];
   recentCheckins: RecentCheckin[];
+  todayCheckins: TodayCheckin[];
   stats: { todayCount: number; activeStudents: number };
   gymName: string;
 }) {
@@ -70,10 +72,7 @@ export function FrontdeskClient({
   const [success, setSuccess] = useState<{ name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
-
-  // Walk-in form
-  const [wiName, setWiName] = useState("");
-  const [wiPhone, setWiPhone] = useState("");
+  const [showTodayList, setShowTodayList] = useState(false);
 
   // New-client form
   const [nc, setNc] = useState({
@@ -137,19 +136,6 @@ export function FrontdeskClient({
     });
   }
 
-  function handleWalkIn() {
-    if (!wiName.trim()) { setError("Name is required."); return; }
-    setError(null);
-    startTransition(async () => {
-      const r = await walkInCheckIn(wiName, wiPhone, DEFAULT_CLASS);
-      if (!r.ok) { setError(r.error); return; }
-      setSuccess({ name: r.data.student_name });
-      setWiName(""); setWiPhone("");
-      switchMode("search");
-      router.refresh();
-    });
-  }
-
   function handleNewClient() {
     if (!nc.name.trim()) { setError("Name is required."); return; }
     setError(null);
@@ -176,9 +162,8 @@ export function FrontdeskClient({
   });
 
   const MODES: { id: Mode; label: string; icon: React.ElementType }[] = [
-    { id: "search",     label: "Search & Check In", icon: Search   },
-    { id: "walkin",     label: "Walk-In",            icon: UserPlus },
-    { id: "new-client", label: "New Client",         icon: Plus     },
+    { id: "search",     label: "Search & Check In", icon: Search },
+    { id: "new-client", label: "New Client",         icon: Plus   },
   ];
 
   // ─────────────────────────────────────────────────────────── render
@@ -218,7 +203,7 @@ export function FrontdeskClient({
 
           {/* Mode switcher */}
           <div className="shrink-0 px-6 pt-5 pb-5 border-b border-[#111]">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {MODES.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -281,15 +266,6 @@ export function FrontdeskClient({
                       <p className="text-sm text-[#555]">
                         {query ? `No students match "${query}"` : "Start typing to search…"}
                       </p>
-                      {query && (
-                        <button
-                          onClick={() => { switchMode("walkin"); setWiName(query); }}
-                          className="mt-1 h-10 px-5 rounded-xl bg-[#111] border border-[#222] text-sm text-white hover:border-[#333] transition-colors inline-flex items-center gap-2"
-                        >
-                          <UserPlus className="h-4 w-4" />
-                          Add as Walk-In
-                        </button>
-                      )}
                     </div>
                   ) : (
                     filtered.map((s) => (
@@ -325,40 +301,6 @@ export function FrontdeskClient({
                   )}
                 </div>
               </>
-            )}
-
-            {/* ── Walk-in mode ── */}
-            {mode === "walkin" && (
-              <div className="max-w-lg space-y-4">
-                <p className="text-sm text-[#555]">
-                  Quick check-in for a first-time guest. Creates a trial student record.
-                </p>
-                <input
-                  value={wiName}
-                  onChange={(e) => setWiName(e.target.value)}
-                  placeholder="Full name *"
-                  autoFocus
-                  className="w-full h-14 px-5 rounded-2xl bg-[#0a0a0a] border border-[#222] text-base text-white placeholder:text-[#444] outline-none focus:border-white/25 transition-colors"
-                />
-                <input
-                  value={wiPhone}
-                  onChange={(e) => setWiPhone(e.target.value)}
-                  placeholder="Phone (optional)"
-                  type="tel"
-                  className="w-full h-14 px-5 rounded-2xl bg-[#0a0a0a] border border-[#222] text-base text-white placeholder:text-[#444] outline-none focus:border-white/25 transition-colors"
-                />
-                <button
-                  onClick={handleWalkIn}
-                  disabled={pending || !wiName.trim()}
-                  className="w-full h-14 rounded-2xl bg-white text-black font-bold text-base hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-                >
-                  {pending
-                    ? <Loader2 className="h-5 w-5 animate-spin" />
-                    : <Check className="h-5 w-5" strokeWidth={3} />
-                  }
-                  Walk-In Check In
-                </button>
-              </div>
             )}
 
             {/* ── New client mode ── */}
@@ -422,17 +364,54 @@ export function FrontdeskClient({
 
           {/* Stats */}
           <div className="shrink-0 grid grid-cols-2 border-b border-[#111]">
-            <div className="px-5 py-5 border-r border-[#111]">
+            <button
+              onClick={() => setShowTodayList((v) => !v)}
+              className="px-5 py-5 border-r border-[#111] text-left hover:bg-[#070707] transition-colors group"
+            >
               <p className="text-[9px] uppercase tracking-widest text-[#444] mb-2">Today</p>
-              <p className="text-4xl font-bold tabular-nums">{stats.todayCount}</p>
+              <div className="flex items-end gap-1.5">
+                <p className="text-4xl font-bold tabular-nums">{stats.todayCount}</p>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-[#444] mb-1.5 transition-transform group-hover:text-[#666]",
+                  showTodayList && "rotate-180",
+                )} />
+              </div>
               <p className="text-xs text-[#555] mt-1">check-ins</p>
-            </div>
+            </button>
             <div className="px-5 py-5">
               <p className="text-[9px] uppercase tracking-widest text-[#444] mb-2">Active</p>
               <p className="text-4xl font-bold tabular-nums">{stats.activeStudents}</p>
               <p className="text-xs text-[#555] mt-1">students</p>
             </div>
           </div>
+
+          {/* Today's check-ins expandable list */}
+          {showTodayList && (
+            <div className="shrink-0 border-b border-[#111] max-h-60 overflow-y-auto">
+              {todayCheckins.length === 0 ? (
+                <p className="px-5 py-3 text-xs text-[#444]">No check-ins yet today.</p>
+              ) : (
+                <ul>
+                  {todayCheckins.map((c) => (
+                    <li
+                      key={c.attendance_id}
+                      className="flex items-center justify-between px-5 py-2.5 border-b border-[#0d0d0d] last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-white truncate">{c.student_name}</p>
+                        {c.class_type && (
+                          <p className="text-[11px] text-[#555] truncate">{c.class_type}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-[#666] tabular-nums ml-3 shrink-0 whitespace-nowrap">
+                        {relativeTime(c.checked_in_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto divide-y divide-[#0d0d0d]">
 
