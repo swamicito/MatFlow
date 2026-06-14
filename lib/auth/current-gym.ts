@@ -150,6 +150,21 @@ export async function listUserGyms(): Promise<GymContext[]> {
     // Fall through to empty list on any auth error.
   }
 
-  // No session — return empty rather than leaking all gyms.
-  return [];
+  // No session (pre-auth / demo mode) — fall back to all gyms in the DB so
+  // the SelectGymState screen works before real auth is wired.  Once
+  // Supabase session auth is live this branch becomes unreachable.
+  try {
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("gyms")
+      .select("id, name, slug")
+      .order("created_at", { ascending: true });
+    return (data ?? []).map((g: any) => ({
+      id: g.id as string,
+      name: g.name as string,
+      slug: g.slug as string,
+    }));
+  } catch {
+    return [];
+  }
 }

@@ -26,26 +26,24 @@ async function isOnboardingComplete(gymId: string): Promise<boolean> {
   }
 }
 
-// Shown when the user has no gym access at all (not in user_gyms, no cookie).
-function NoGymState() {
+// Shown at the top when the user has no gym access at all.
+// Children are still rendered so /settings/gym is reachable via the button.
+function NoGymBanner() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="max-w-sm w-full text-center">
-        <div className="h-16 w-16 rounded-2xl bg-[#0a0a0a] border border-[#1f1f1f] grid place-items-center mx-auto mb-6">
-          <Building2 className="h-7 w-7 text-[#444]" />
-        </div>
-        <h1 className="text-xl font-semibold text-white mb-2">No gym configured</h1>
-        <p className="text-[#666] text-sm leading-relaxed mb-8">
-          Your account is not linked to any gym. Contact your administrator,
-          or create a gym to get started.
+    <div className="border-b border-[#111] bg-[#0a0a0a] px-6 py-4 flex items-center gap-4">
+      <Building2 className="h-5 w-5 text-[#555] shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white">No gym configured</p>
+        <p className="text-xs text-[#666] mt-0.5">
+          Create a gym to start using the dashboard.
         </p>
-        <Link
-          href="/settings/gym"
-          className="inline-flex h-10 items-center gap-2 px-5 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
-        >
-          Set up a gym
-        </Link>
       </div>
+      <Link
+        href="/settings/gym"
+        className="shrink-0 inline-flex h-8 items-center gap-2 px-4 rounded-lg bg-white text-black text-xs font-semibold hover:bg-white/90 transition-colors"
+      >
+        Set up a gym
+      </Link>
     </div>
   );
 }
@@ -91,12 +89,19 @@ export default async function DashboardLayout({
 
   // ── No active gym ──────────────────────────────────────────────────────────
   if (!gymId) {
-    // Authenticated user with gym memberships but no active selection.
+    // Authenticated user with gym memberships but no active selection → let
+    // them pick one.  This is the normal path in pre-auth / demo mode after
+    // the listUserGyms() fallback returns the gyms from the DB.
     if (gyms.length > 0) {
       return <SelectGymState gyms={gyms} />;
     }
-    // No gym access at all.
-    return <NoGymState />;
+    // Truly zero gyms: render a minimal shell so /settings/gym is reachable.
+    return (
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <NoGymBanner />
+        <main className="flex-1 p-6 md:p-8">{children}</main>
+      </div>
+    );
   }
 
   // ── Onboarding gate ────────────────────────────────────────────────────────
