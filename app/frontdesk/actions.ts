@@ -37,13 +37,23 @@ export async function checkInStudent(
 
   const supabase = createAdminClient() as any;
 
+  // ── Ownership check baked into the student fetch ───────────────────────────
+  // attendance has no gym_id column.  Enforcing gym ownership here — before
+  // the insert — is the only available guard.  Previously this fetch had no
+  // gym filter, so any student UUID from any gym could be checked in,
+  // polluting another gym's attendance records and credit counts.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
   const { data: student, error: studentErr } = await supabase
     .from("students")
     .select("id, full_name")
     .eq("id", studentId)
+    .eq("gym_id", gymId)
     .maybeSingle();
   if (studentErr) return { ok: false, error: studentErr.message };
   if (!student) return { ok: false, error: "Student not found." };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const { data: row, error } = await supabase
     .from("attendance")

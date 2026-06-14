@@ -103,11 +103,32 @@ export async function updateBeltProgress(
 
   const supabase = createAdminClient() as any;
 
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // belt_progress has no gym_id column, so the only way to enforce gym
+  // ownership is to verify the parent student row belongs to the current gym
+  // before touching either table.  Without this, any caller who knows a
+  // student UUID can overwrite belt data for students at other gyms.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", input.student_id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Student not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   // Mirror the current belt to the student row so the table stays in sync.
   const { error: studentErr } = await supabase
     .from("students")
     .update({ belt_rank: input.current_belt })
-    .eq("id", input.student_id);
+    .eq("id", input.student_id)
+    .eq("gym_id", gymId);
   if (studentErr) return { ok: false, error: studentErr.message };
 
   const { error } = await supabase.from("belt_progress").upsert(
@@ -148,7 +169,30 @@ export async function updateStudent(
   if (input.status && !STUDENT_STATUSES.includes(input.status)) {
     return { ok: false, error: "Invalid status." };
   }
+
   const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // Without this, any caller with a student UUID can modify name, email,
+  // phone, status, and notes for students at other gyms.  Changing `status`
+  // to "inactive" gates portal access — a particularly destructive cross-gym
+  // write.  The pre-check is an explicit hard block; the .eq("gym_id") on the
+  // update itself is a second, independent guard at the DB layer.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", input.id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Student not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const patch: Database["public"]["Tables"]["students"]["Update"] = {};
   if (input.full_name !== undefined) patch.full_name = input.full_name.trim();
   if (input.email !== undefined) patch.email = input.email?.trim() || null;
@@ -159,7 +203,8 @@ export async function updateStudent(
   const { error } = await supabase
     .from("students")
     .update(patch)
-    .eq("id", input.id);
+    .eq("id", input.id)
+    .eq("gym_id", gymId);
 
   if (error) return { ok: false, error: error.message };
 
@@ -175,19 +220,33 @@ export async function convertLeadToStudent(
 ): Promise<ActionResult<{ student_id: string }>> {
   const supabase = createAdminClient() as any;
 
+  // ── Ownership pre-check baked into the lead fetch ─────────────────────────
+  // Without the gym_id filter, gym A's staff can convert any lead by UUID —
+  // including leads from gym B.  The resulting student would be stamped with
+  // gym B's gym_id (inherited from lead.gym_id), silently creating a student
+  // record in a gym the caller has no access to.
+  //
+  // Fix: add .eq("gym_id", gymId) to the lead fetch so it returns null for
+  // out-of-gym leads.  The student insert then uses gymId from the session
+  // (not lead.gym_id) as the authoritative source of truth.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
   const { data: lead, error: leadErr } = await supabase
     .from("leads")
-    .select("id, gym_id, name, email, phone, notes")
+    .select("id, name, email, phone, notes")
     .eq("id", leadId)
+    .eq("gym_id", gymId)
     .maybeSingle();
+  // ──────────────────────────────────────────────────────────────────────────
 
   if (leadErr) return { ok: false, error: leadErr.message };
-  if (!lead) return { ok: false, error: "Lead not found." };
+  if (!lead) return { ok: false, error: "Lead not found or does not belong to this gym." };
 
   const { data: student, error: insertErr } = await supabase
     .from("students")
     .insert({
-      gym_id: lead.gym_id,
+      gym_id: gymId,
       lead_id: lead.id,
       full_name: lead.name,
       email: lead.email,
@@ -219,8 +278,12 @@ export async function convertLeadToStudent(
     { onConflict: "student_id" },
   );
 
-  // Mark the lead as converted.
-  await supabase.from("leads").update({ status: "converted" }).eq("id", leadId);
+  // Mark the lead as converted — scoped to this gym as a second safety layer.
+  await supabase
+    .from("leads")
+    .update({ status: "converted" })
+    .eq("id", leadId)
+    .eq("gym_id", gymId);
 
   revalidatePath("/students");
   revalidatePath("/leads");
@@ -295,6 +358,23 @@ export async function updateFamily(
   },
 ): Promise<ActionResult> {
   const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("family_accounts")
+    .select("id")
+    .eq("id", id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Family account not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const update: Database["public"]["Tables"]["family_accounts"]["Update"] = {};
   if (patch.parent_name !== undefined) update.parent_name = patch.parent_name.trim();
   if (patch.parent_email !== undefined) update.parent_email = patch.parent_email?.trim() || null;
@@ -303,7 +383,11 @@ export async function updateFamily(
   if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null;
   if (patch.head_student_id !== undefined) update.head_student_id = patch.head_student_id;
 
-  const { error } = await supabase.from("family_accounts").update(update).eq("id", id);
+  const { error } = await supabase
+    .from("family_accounts")
+    .update(update)
+    .eq("id", id)
+    .eq("gym_id", gymId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/students");
@@ -318,10 +402,32 @@ export async function addStudentToFamily(
     return { ok: false, error: "Student id and family id are required." };
   }
   const supabase = createAdminClient() as any;
+
+  // ── Dual ownership pre-check ──────────────────────────────────────────────────
+  // Both the student and the target family must belong to the current gym.
+  // Without this, a caller can link any student into any family account across
+  // gyms, merging billing/contact records from different tenants.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const [{ data: ownedStudent }, { data: ownedFamily }] = await Promise.all([
+    supabase.from("students").select("id").eq("id", student_id).eq("gym_id", gymId).maybeSingle(),
+    supabase.from("family_accounts").select("id").eq("id", family_id).eq("gym_id", gymId).maybeSingle(),
+  ]);
+
+  if (!ownedStudent) {
+    return { ok: false, error: "Student not found or does not belong to this gym." };
+  }
+  if (!ownedFamily) {
+    return { ok: false, error: "Family account not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { error } = await supabase
     .from("students")
     .update({ family_account_id: family_id })
-    .eq("id", student_id);
+    .eq("id", student_id)
+    .eq("gym_id", gymId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/students");
@@ -333,20 +439,33 @@ export async function removeStudentFromFamily(
 ): Promise<ActionResult> {
   const supabase = createAdminClient() as any;
 
+  // ── Ownership check baked into the student fetch ───────────────────────────
+  // Adding .eq("gym_id", gymId) to the existing fetch serves double duty:
+  // it verifies gym ownership AND retrieves family_account_id in one query.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
   // If this student was the family head, clear that pointer too.
   const { data: student } = await supabase
     .from("students")
     .select("family_account_id")
     .eq("id", student_id)
+    .eq("gym_id", gymId)
     .maybeSingle();
+
+  if (!student) {
+    return { ok: false, error: "Student not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const { error } = await supabase
     .from("students")
     .update({ family_account_id: null })
-    .eq("id", student_id);
+    .eq("id", student_id)
+    .eq("gym_id", gymId);
   if (error) return { ok: false, error: error.message };
 
-  if (student?.family_account_id) {
+  if (student.family_account_id) {
     await supabase
       .from("family_accounts")
       .update({ head_student_id: null })
@@ -387,6 +506,25 @@ export async function saveWaiver(
   }
 
   const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check (waivers have no gym_id column) ────────────────────
+  // Without this, a caller can attach a signed waiver to any student UUID
+  // globally — creating false legal records for students at other gyms.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: ownedStudent } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", input.student_id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!ownedStudent) {
+    return { ok: false, error: "Student not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { data, error } = await supabase
     .from("waivers")
     .insert({
@@ -501,6 +639,37 @@ async function generateAndStoreSignedPdf(
 
 export async function deleteWaiver(id: string): Promise<ActionResult> {
   const supabase = createAdminClient() as any;
+
+  // ── Ownership chain: waiver → student → gym ────────────────────────────────
+  // The waivers table has no gym_id column, so ownership is resolved through
+  // the parent student record.  Two explicit queries are required:
+  //   1. Fetch the waiver to get its student_id.
+  //   2. Verify that student belongs to the current gym.
+  // Both checks must pass before the delete proceeds — waivers are legal
+  // documents and their deletion is irreversible.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: waiver } = await supabase
+    .from("waivers")
+    .select("id, student_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!waiver) return { ok: false, error: "Waiver not found." };
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", waiver.student_id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!student) {
+    return { ok: false, error: "Waiver does not belong to a student in this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { error } = await supabase.from("waivers").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/students");

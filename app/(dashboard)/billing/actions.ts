@@ -67,13 +67,35 @@ export async function updatePlan(id: string, input: any): Promise<ActionResult> 
   try {
     const supabase = createAdminClient() as any;
 
-    const { error } = await supabase.from("membership_plans").update({
+    // ── Ownership pre-check ──────────────────────────────────────────────────
+    // membership_plans rows are scoped to a gym.  Without this check, any
+    // caller who knows a plan UUID can reprice or rename a plan at another
+    // gym — directly affecting what that gym's members are billed.
+    const gymId = await getCurrentGymId();
+    if (!gymId) return { ok: false, error: "No active gym." };
+
+    const { data: owned } = await supabase
+      .from("membership_plans")
+      .select("id")
+      .eq("id", id)
+      .eq("gym_id", gymId)
+      .maybeSingle();
+
+    if (!owned) {
+      return { ok: false, error: "Plan not found or does not belong to this gym." };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    const { error } = await supabase
+      .from("membership_plans")
+      .update({
         name: input.name.trim(),
         price_cents: Math.round(input.price_cents),
         interval: input.interval,
         description: input.description?.trim() || null,
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("gym_id", gymId);
 
     if (error) return { ok: false, error: error.message };
 
@@ -89,8 +111,30 @@ export async function deletePlan(id: string): Promise<ActionResult> {
   try {
     const supabase = createAdminClient() as any;
 
-    const { error } = await supabase.from("membership_plans").delete()
-      .eq("id", id);
+    // ── Ownership pre-check ──────────────────────────────────────────────────
+    // Deleting a plan at another gym removes the pricing tier that their
+    // active subscriptions may reference — cascading into billing failures.
+    // Hard-block if the plan doesn't belong to the current gym.
+    const gymId = await getCurrentGymId();
+    if (!gymId) return { ok: false, error: "No active gym." };
+
+    const { data: owned } = await supabase
+      .from("membership_plans")
+      .select("id")
+      .eq("id", id)
+      .eq("gym_id", gymId)
+      .maybeSingle();
+
+    if (!owned) {
+      return { ok: false, error: "Plan not found or does not belong to this gym." };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    const { error } = await supabase
+      .from("membership_plans")
+      .delete()
+      .eq("id", id)
+      .eq("gym_id", gymId);
 
     if (error) return { ok: false, error: error.message };
 

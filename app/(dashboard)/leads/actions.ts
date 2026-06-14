@@ -55,10 +55,31 @@ export async function updateLeadStatus(
   }
 
   const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // Without this, any caller with a lead UUID can set it to "converted" or
+  // "lost" — corrupting another gym's sales pipeline without touching their
+  // own data.  leads has a gym_id column so a single scoped query is enough.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Lead not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { error } = await supabase
     .from("leads")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("gym_id", gymId);
 
   if (error) return { ok: false, error: error.message };
 

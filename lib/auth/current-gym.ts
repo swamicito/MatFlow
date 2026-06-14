@@ -2,9 +2,17 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 const GYM_COOKIE = "mf-gym-id";
-const FALLBACK_SLUG = "asbury-park";
+
+// Strict UUID v4 regex — rejects anything that isn't a properly-formed UUID.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
 
 export { GYM_COOKIE };
 
@@ -12,54 +20,79 @@ export { GYM_COOKIE };
  * Returns the active gym_id for the current request.
  *
  * Resolution order:
- *  1. `mf-gym-id` cookie  (set by /api/gym when user switches gyms)
- *  2. ASBURY_PARK_GYM_ID  env var  (local dev / single-tenant convenience)
- *  3. First gym with slug `asbury-park`  (legacy seed)
- *  4. First row in the gyms table        (last-resort fallback)
+ *  1. `mf-gym-id` cookie — set by /api/gym when the user explicitly picks a gym.
+ *  2. Supabase auth session → first gym in user_gyms for that user.
  *
- * Returns `null` if no gym exists at all (empty DB / pre-onboarding).
+ * Returns `null` if neither source yields a valid gym.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * DELIBERATELY REMOVED fallbacks:
+ *  ✗  ASBURY_PARK_GYM_ID env var   — leaked a hardcoded gym ID into every
+ *                                     request that lacked a cookie.
+ *  ✗  gyms WHERE slug = 'asbury-park' — same problem; silently serves gym A
+ *                                        data to gym B users.
+ *  ✗  gyms ORDER BY created_at LIMIT 1 — the most dangerous: guaranteed to
+ *                                         cross-contaminate once a second gym
+ *                                         is onboarded.
+ * ──────────────────────────────────────────────────────────────────────────
  */
 export async function getCurrentGymId(): Promise<string | null> {
-  // 1. Cookie
+  // ── 1. Explicit cookie (set by /api/gym after the user selects a gym) ──
   const store = await cookies();
   const fromCookie = store.get(GYM_COOKIE)?.value;
-  if (fromCookie && fromCookie.length === 36) return fromCookie;
+  if (fromCookie && isUuid(fromCookie)) return fromCookie;
 
-  // 2. Env var
-  const fromEnv = process.env.ASBURY_PARK_GYM_ID;
-  if (fromEnv) return fromEnv;
+  // ── 2. Supabase auth session → user_gyms membership ──
+  //
+  // If the caller has a real Supabase session we can derive their gym from
+  // the user_gyms join table.  This path is a no-op today (staff auth is not
+  // yet wired) but it will become the primary path once it is, and having it
+  // here means getCurrentGymId() will "just work" the moment auth lands.
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // 3 & 4. DB lookup
-  const supabase = createAdminClient() as any;
-  const { data: bySlug } = await supabase
-    .from("gyms")
-    .select("id")
-    .eq("slug", FALLBACK_SLUG)
-    .maybeSingle();
-  if (bySlug?.id) return bySlug.id;
+    if (user) {
+      const admin = createAdminClient() as any;
+      const { data } = await admin
+        .from("user_gyms")
+        .select("gym_id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-  const { data: first } = await supabase
-    .from("gyms")
-    .select("id")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return first?.id ?? null;
+      if (data?.gym_id && isUuid(data.gym_id as string)) {
+        return data.gym_id as string;
+      }
+
+      // User is authenticated but has no gym_id entry → do NOT fall through
+      // to a global lookup.  Return null so the caller can redirect to setup.
+      return null;
+    }
+  } catch {
+    // Auth lookup failures (e.g. no Supabase env configured in test) should
+    // not hard-crash; just fall through to null.
+  }
+
+  // ── No cookie, no session — cannot safely determine a gym ──
+  return null;
 }
 
 /**
- * Like `getCurrentGymId()` but throws if no gym is found.
- * Use in server actions where a gym_id is mandatory.
+ * Like `getCurrentGymId()` but throws if no gym can be determined.
+ * Use in server actions where proceeding without a gym_id is unsafe.
  */
 export async function requireGymId(): Promise<string> {
   const id = await getCurrentGymId();
-  if (!id) throw new Error("No active gym. Complete onboarding first.");
+  if (!id) throw new Error("No active gym. Sign in and select a gym first.");
   return id;
 }
 
 /**
- * Returns a lightweight context object with the active gym_id and its name.
- * Useful for rendering the gym switcher and page headers.
+ * Returns a lightweight context object for the active gym.
  */
 export type GymContext = {
   id: string;
@@ -81,14 +114,42 @@ export async function getGymContext(): Promise<GymContext | null> {
 }
 
 /**
- * Returns all gyms accessible to a given user_id via the user_gyms table,
- * or falls back to all gyms in the system (for pre-auth single-tenant mode).
+ * Returns only the gyms the current user is a member of (via user_gyms).
+ *
+ * If the user has a real Supabase session, returns their specific gym list.
+ * If there is no session (pre-auth / demo), returns an empty array rather
+ * than leaking the full list of every gym in the database.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * DELIBERATELY REMOVED:
+ *  ✗  gyms SELECT * ORDER BY created_at  — was returning every gym in the DB
+ *                                          to every user regardless of access.
+ * ──────────────────────────────────────────────────────────────────────────
  */
 export async function listUserGyms(): Promise<GymContext[]> {
-  const supabase = createAdminClient() as any;
-  const { data } = await supabase
-    .from("gyms")
-    .select("id, name, slug")
-    .order("created_at", { ascending: true });
-  return (data ?? []).map((g: any) => ({ id: g.id, name: g.name, slug: g.slug }));
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const admin = createAdminClient() as any;
+      const { data } = await admin
+        .from("user_gyms")
+        .select("gyms(id, name, slug)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      return (data ?? [])
+        .map((row: any) => row.gyms)
+        .filter(Boolean)
+        .map((g: any) => ({ id: g.id as string, name: g.name as string, slug: g.slug as string }));
+    }
+  } catch {
+    // Fall through to empty list on any auth error.
+  }
+
+  // No session — return empty rather than leaking all gyms.
+  return [];
 }

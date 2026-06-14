@@ -76,13 +76,37 @@ export async function updateWaiverTemplate(
   const role = await getCurrentRole();
   if (!can(role, "edit_settings")) return { ok: false, error: "Permission denied." };
 
+  const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // Role check above only verifies the caller's permission level, not which
+  // gym's template they're modifying.  Without this, an owner at gym A can
+  // rename or toggle the `required` flag on a template belonging to gym B.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("waiver_templates")
+    .select("id")
+    .eq("id", id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Template not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name.trim();
   if (patch.required !== undefined) update.required = patch.required;
   if (patch.pdf_template_url !== undefined) update.pdf_template_url = patch.pdf_template_url;
 
-  const supabase = createAdminClient() as any;
-  const { error } = await supabase.from("waiver_templates").update(update).eq("id", id);
+  const { error } = await supabase
+    .from("waiver_templates")
+    .update(update)
+    .eq("id", id)
+    .eq("gym_id", gymId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/settings/waivers");
@@ -96,7 +120,32 @@ export async function deleteWaiverTemplate(id: string): Promise<ActionResult> {
   if (!can(role, "edit_settings")) return { ok: false, error: "Permission denied." };
 
   const supabase = createAdminClient() as any;
-  const { error } = await supabase.from("waiver_templates").delete().eq("id", id);
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // Waiver templates are legal-document configuration for a specific gym.
+  // Deleting another gym's template removes their compliance setup and
+  // invalidates any waiver flows referencing it — potentially an unrecoverable
+  // data loss.  Both the pre-check and the scoped DELETE must pass.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: owned } = await supabase
+    .from("waiver_templates")
+    .select("id")
+    .eq("id", id)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Template not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const { error } = await supabase
+    .from("waiver_templates")
+    .delete()
+    .eq("id", id)
+    .eq("gym_id", gymId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/settings/waivers");
@@ -123,6 +172,28 @@ export async function uploadTemplatePdf(
   if (!gymId) return { ok: false, error: "No active gym." };
 
   const supabase = createAdminClient() as any;
+
+  // ── Ownership pre-check ────────────────────────────────────────────────────
+  // The previous version used gymId only to build the storage path, but never
+  // verified that `templateId` belongs to `gymId`.  The split exploit:
+  //   • Caller (gym A) supplies a templateId from gym B.
+  //   • PDF uploads to gymA/{templateB_id}.pdf  (storage write to gym A).
+  //   • DB update stamps gym B's template record with that URL.
+  // Result: gym B's legal template PDF is silently replaced with gym A's file.
+  // The pre-check closes this by ensuring the template row is owned by the
+  // current gym before any storage or DB write proceeds.
+  const { data: owned } = await supabase
+    .from("waiver_templates")
+    .select("id")
+    .eq("id", templateId)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Template not found or does not belong to this gym." };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   await supabase.storage.createBucket(TEMPLATE_BUCKET, { public: true }).catch(() => {});
 
   const path = `${gymId}/${templateId}.pdf`;
@@ -139,7 +210,8 @@ export async function uploadTemplatePdf(
   await supabase
     .from("waiver_templates")
     .update({ pdf_template_url: url })
-    .eq("id", templateId);
+    .eq("id", templateId)
+    .eq("gym_id", gymId);
 
   revalidatePath("/settings/waivers");
   return { ok: true, data: { url } };

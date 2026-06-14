@@ -184,12 +184,10 @@ const DEFAULT_FORM: ClassFormData = {
 };
 
 function ClassFormDialog({
-  gymId,
   editing,
   defaultDay,
   onClose,
 }: {
-  gymId: string;
   editing: ClassRow | null;
   defaultDay: number;
   onClose: () => void;
@@ -217,8 +215,8 @@ function ClassFormDialog({
   function handleSubmit() {
     startTransition(async () => {
       const result = editing
-        ? await updateClass(editing.id, gymId, form)
-        : await createClass(gymId, form);
+        ? await updateClass(editing.id, form)
+        : await createClass(form);
 
       if (!result.ok) { toast.error(result.error); return; }
       toast.success(editing ? "Class updated" : "Class created");
@@ -367,11 +365,9 @@ function ClassFormDialog({
 
 function DeleteConfirmDialog({
   cls,
-  gymId,
   onClose,
 }: {
   cls: ClassRow;
-  gymId: string;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -379,7 +375,7 @@ function DeleteConfirmDialog({
 
   function handleDelete() {
     startTransition(async () => {
-      const result = await deleteClass(cls.id, gymId);
+      const result = await deleteClass(cls.id);
       if (!result.ok) { toast.error(result.error); return; }
       toast.success("Class deleted");
       router.refresh();
@@ -613,7 +609,6 @@ export function ScheduleView({
       {/* Dialogs */}
       {(addForDay !== null || editing !== null) && (
         <ClassFormDialog
-          gymId={gymId}
           editing={editing}
           defaultDay={addForDay ?? editing?.day_of_week ?? 1}
           onClose={() => { setAddForDay(null); setEditing(null); }}
@@ -622,7 +617,6 @@ export function ScheduleView({
       {deleting && (
         <DeleteConfirmDialog
           cls={deleting}
-          gymId={gymId}
           onClose={() => setDeleting(null)}
         />
       )}

@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentGymId } from "@/lib/auth/current-gym";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -82,11 +83,18 @@ export async function listClasses(gymId: string): Promise<ClassRow[]> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createClass(
-  gymId: string,
   data: ClassFormData,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!data.title.trim()) return { ok: false, error: "Title is required." };
   if (data.start_time >= data.end_time) return { ok: false, error: "End time must be after start time." };
+
+  // ── Resolve gym from session, not from caller ───────────────────────────────────
+  // The previous signature accepted gymId as a parameter — any gym UUID could
+  // be passed from the client, stamping classes under a gym the caller has no
+  // business writing to.
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+  // ────────────────────────────────────────────────────────────────────────
 
   const admin = createAdminClient() as any;
   const { data: row, error } = await admin
@@ -115,13 +123,29 @@ export async function createClass(
 
 export async function updateClass(
   classId: string,
-  gymId: string,
   data: ClassFormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!data.title.trim()) return { ok: false, error: "Title is required." };
   if (data.start_time >= data.end_time) return { ok: false, error: "End time must be after start time." };
 
+  // ── Session-resolved gym + ownership pre-check ────────────────────────────────
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
   const admin = createAdminClient() as any;
+
+  const { data: owned } = await admin
+    .from("classes")
+    .select("id")
+    .eq("id", classId)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Class not found or does not belong to this gym." };
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   const { error } = await admin
     .from("classes")
     .update({
@@ -147,9 +171,25 @@ export async function updateClass(
 
 export async function deleteClass(
   classId: string,
-  gymId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  // ── Session-resolved gym + ownership pre-check ────────────────────────────────
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
   const admin = createAdminClient() as any;
+
+  const { data: owned } = await admin
+    .from("classes")
+    .select("id")
+    .eq("id", classId)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!owned) {
+    return { ok: false, error: "Class not found or does not belong to this gym." };
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   const { error } = await admin
     .from("classes")
     .delete()
