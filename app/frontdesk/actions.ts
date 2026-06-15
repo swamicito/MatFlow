@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
 import { CLASS_TYPES, DEFAULT_CLASS, type ClassType } from "@/lib/checkin";
 import { deductClassCredit } from "@/app/(dashboard)/settings/sell/actions";
+import type { UtmParams } from "@/lib/utm";
 
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? object : { data: T }))
@@ -121,6 +122,8 @@ export async function walkInCheckIn(
   name: string,
   phone: string,
   classType: string,
+  source: string = "front_desk",
+  utm: UtmParams = {},
 ): Promise<ActionResult<{ student_id: string; student_name: string }>> {
   if (!name?.trim()) return { ok: false, error: "Name is required." };
   const cls = normalizeClass(classType);
@@ -138,6 +141,12 @@ export async function walkInCheckIn(
       status: "trial",
       belt_rank: "white",
       notes: "Walk-in from front desk kiosk.",
+      source:       source,
+      utm_source:   utm.utm_source   ?? null,
+      utm_medium:   utm.utm_medium   ?? null,
+      utm_campaign: utm.utm_campaign ?? null,
+      utm_term:     utm.utm_term     ?? null,
+      utm_content:  utm.utm_content  ?? null,
     })
     .select("id, full_name")
     .single();

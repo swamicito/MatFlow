@@ -12,6 +12,7 @@ import {
   type WaiverType,
 } from "@/lib/students";
 import type { BeltRank, Database, StudentStatus } from "@/lib/supabase/types";
+import type { UtmParams } from "@/lib/utm";
 
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? object : { data: T }))
@@ -28,7 +29,8 @@ export type CreateStudentInput = {
   belt_rank?: BeltRank;
   status?: StudentStatus;
   notes?: string | null;
-};
+  source?: string | null;
+} & UtmParams;
 
 export async function createStudent(
   input: CreateStudentInput,
@@ -55,6 +57,12 @@ export async function createStudent(
       belt_rank: belt,
       status,
       notes: input.notes?.trim() || null,
+      source:       input.source       ?? null,
+      utm_source:   input.utm_source   ?? null,
+      utm_medium:   input.utm_medium   ?? null,
+      utm_campaign: input.utm_campaign ?? null,
+      utm_term:     input.utm_term     ?? null,
+      utm_content:  input.utm_content  ?? null,
     })
     .select("id")
     .single();
@@ -234,7 +242,7 @@ export async function convertLeadToStudent(
 
   const { data: lead, error: leadErr } = await supabase
     .from("leads")
-    .select("id, name, email, phone, notes")
+    .select("id, name, email, phone, notes, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content")
     .eq("id", leadId)
     .eq("gym_id", gymId)
     .maybeSingle();
@@ -255,6 +263,12 @@ export async function convertLeadToStudent(
       belt_rank: "white",
       status: "active",
       family_account_id: options.family_account_id ?? null,
+      source:       lead.source       ?? null,
+      utm_source:   lead.utm_source   ?? null,
+      utm_medium:   lead.utm_medium   ?? null,
+      utm_campaign: lead.utm_campaign ?? null,
+      utm_term:     lead.utm_term     ?? null,
+      utm_content:  lead.utm_content  ?? null,
     })
     .select("id")
     .single();

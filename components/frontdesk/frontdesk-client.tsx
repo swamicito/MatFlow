@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { checkInStudent, appendStudentNote } from "@/app/frontdesk/actions";
 import { createStudent, saveWaiver } from "@/app/(dashboard)/students/actions";
+import { captureUtmFromUrl, getStoredUtm, clearStoredUtm } from "@/lib/utm";
 import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
 import { BeltBadge } from "@/components/students/belt-badge";
@@ -97,6 +98,11 @@ export function FrontdeskClient({
 
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Capture UTM params from URL on mount (persists to localStorage)
+  useEffect(() => {
+    captureUtmFromUrl();
+  }, []);
+
   // Live clock
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -158,14 +164,22 @@ export function FrontdeskClient({
     if (!nc.name.trim()) { setError("Name is required."); return; }
     setError(null);
     startTransition(async () => {
+      const utm = getStoredUtm();
       const r = await createStudent({
         full_name: nc.name,
         email: nc.email || null,
         phone: nc.phone || null,
         belt_rank: nc.belt,
         status: "active",
+        source: utm?.source ?? "front_desk",
+        utm_source:   utm?.utm_source   ?? null,
+        utm_medium:   utm?.utm_medium   ?? null,
+        utm_campaign: utm?.utm_campaign ?? null,
+        utm_term:     utm?.utm_term     ?? null,
+        utm_content:  utm?.utm_content  ?? null,
       });
       if (!r.ok) { setError(r.error); return; }
+      clearStoredUtm();
       // Transition to inline waiver step instead of immediate success overlay.
       const defaultTpl = waiverTemplates.find((t) => t.required) ?? waiverTemplates[0];
       setPendingStudent({ id: r.data.id, name: r.data.name });
