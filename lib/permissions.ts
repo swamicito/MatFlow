@@ -39,7 +39,8 @@ export type Permission =
   | "view_ondemand"
   | "edit_ondemand"
   | "view_messages"
-  | "send_messages";
+  | "send_messages"
+  | "delete_thread";
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -71,6 +72,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "edit_ondemand",
     "view_messages",
     "send_messages",
+    "delete_thread",
   ],
   admin: [
     "view_dashboard",
@@ -100,6 +102,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "edit_ondemand",
     "view_messages",
     "send_messages",
+    "delete_thread",
   ],
   instructor: [
     "view_dashboard",

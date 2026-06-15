@@ -12,11 +12,16 @@ export type ActionResult<T = undefined> =
   | { ok: false; error: string };
 
 function todayIsoDate(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const now = new Date();
+  // Day resets at 6 AM UTC (≈ 2 AM Eastern / midnight Pacific).
+  // If it's before 6 AM UTC the logical "gym day" is still yesterday.
+  if (now.getUTCHours() < 6) {
+    now.setUTCDate(now.getUTCDate() - 1);
+  }
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function normalizeClass(input: string | null | undefined): ClassType {
@@ -76,6 +81,38 @@ export async function checkInStudent(
     ok: true,
     data: { attendance_id: row.id, student_name: student.full_name },
   };
+}
+
+// ───────────────────────── Append Student Note ─────────────────────────
+
+export async function appendStudentNote(
+  studentId: string,
+  note: string,
+): Promise<ActionResult> {
+  if (!studentId) return { ok: false, error: "Student id required." };
+  const supabase = createAdminClient() as any;
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id, notes")
+    .eq("id", studentId)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+  if (!student) return { ok: false, error: "Student not found." };
+
+  const existing = (student.notes ?? "").trim();
+  const updated = existing ? `${existing}\n${note}` : note;
+
+  const { error } = await supabase
+    .from("students")
+    .update({ notes: updated })
+    .eq("id", studentId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/students");
+  return { ok: true };
 }
 
 // ───────────────────────── Walk-in (create + check-in) ─────────────────────────

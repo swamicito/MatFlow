@@ -83,7 +83,7 @@ function ClassListRow({
         )}>
           {fmtTime(cls.start_time)}
         </p>
-        <p className="text-[10px] text-[#666] tabular-nums mt-0.5">
+        <p className="text-[10px] text-[#9CA3AF] tabular-nums mt-0.5">
           {fmtTime(cls.end_time)}
         </p>
       </div>
@@ -480,8 +480,8 @@ export function PortalSchedule({
                     </div>
                   </div>
                   {dayCls.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-[#0f0f0f] py-8 grid place-items-center">
-                      <span className="text-[10px] text-[#1a1a1a] select-none">—</span>
+                    <div className="rounded-xl border border-dashed border-[#374151]/30 py-8 grid place-items-center">
+                      <span className="text-[10px] text-[#374151] select-none">—</span>
                     </div>
                   ) : (
                     dayCls.map((cls) => (

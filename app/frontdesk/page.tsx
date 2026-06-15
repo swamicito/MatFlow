@@ -24,6 +24,7 @@ export type CheckinStudent = Pick<
   "id" | "full_name" | "phone" | "belt_rank" | "status"
 > & {
   last_checked_in_at: string | null;
+  has_waiver: boolean;
 };
 
 export type RecentCheckin = {
@@ -36,9 +37,11 @@ export type RecentCheckin = {
 
 export type TodayCheckin = {
   attendance_id: string;
+  student_id: string;
   student_name: string;
   class_type: string | null;
   checked_in_at: string;
+  has_waiver: boolean;
 };
 
 export type WaiverTemplate = {
@@ -50,8 +53,15 @@ export type WaiverTemplate = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = new Date();
+  // Day resets at 6 AM UTC — mirrors the same boundary used in actions.ts.
+  if (now.getUTCHours() < 6) {
+    now.setUTCDate(now.getUTCDate() - 1);
+  }
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -109,7 +119,7 @@ export default async function FrontdeskPage() {
     activeStudents = studentRows.filter((s) => s.status === "active").length;
 
     if (studentIds.length > 0) {
-      const [attendanceRes, recentRes, todayRes] = await Promise.all([
+      const [attendanceRes, recentRes, todayRes, waiversRes] = await Promise.all([
         supabase
           .from("attendance")
           .select("student_id, checked_in_at")
@@ -128,7 +138,15 @@ export default async function FrontdeskPage() {
           .in("student_id", studentIds)
           .eq("class_date", iso)
           .order("checked_in_at", { ascending: false }),
+        supabase
+          .from("waivers")
+          .select("student_id")
+          .in("student_id", studentIds),
       ]);
+
+      const studentsWithWaiver = new Set<string>(
+        (waiversRes.data ?? []).map((w: any) => w.student_id as string),
+      );
 
       const latestByStudent: Record<string, string> = {};
       for (const a of attendanceRes.data ?? []) {
@@ -144,6 +162,7 @@ export default async function FrontdeskPage() {
       students = studentRows.map((s) => ({
         ...s,
         last_checked_in_at: latestByStudent[s.id] ?? null,
+        has_waiver: studentsWithWaiver.has(s.id),
       }));
 
       recentCheckins = (recentRes.data ?? []).map((a: any) => ({
@@ -158,12 +177,14 @@ export default async function FrontdeskPage() {
       todayCount = todayRows.length;
       todayCheckins = todayRows.map((a: any) => ({
         attendance_id: a.id,
+        student_id: a.student_id,
         student_name: nameById.get(a.student_id) ?? "Unknown",
         class_type: a.class_type,
         checked_in_at: a.checked_in_at,
+        has_waiver: studentsWithWaiver.has(a.student_id),
       }));
     } else {
-      students = studentRows.map((s) => ({ ...s, last_checked_in_at: null }));
+      students = studentRows.map((s) => ({ ...s, last_checked_in_at: null, has_waiver: false }));
     }
   }
 

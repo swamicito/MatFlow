@@ -11,7 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -43,8 +42,16 @@ export function Topbar({
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const visibleItems = navItems.filter((item) => can(role, item.requires));
+
+  function handleSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && search.trim()) {
+      router.push(`/students?search=${encodeURIComponent(search.trim())}`);
+      setSearch("");
+    }
+  }
 
   function switchRole(next: UserRole) {
     if (next === role) return;
@@ -80,6 +87,9 @@ export function Topbar({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search students, leads, classes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKey}
             className="pl-9 bg-[#0a0a0a] border-[#222222] text-white placeholder:text-[#666] focus-visible:ring-white/40"
           />
         </div>
@@ -88,12 +98,24 @@ export function Topbar({
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         <GymSwitcher gyms={gyms} activeGymId={activeGymId} />
 
-        <button
-          className="h-9 w-9 grid place-items-center rounded-md border border-[#222] hover:bg-[#111] transition-colors"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Notifications"
+            className="h-9 w-9 grid place-items-center rounded-md border border-[#222] hover:bg-[#111] transition-colors"
+          >
+            <Bell className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-[#0a0a0a] border-[#1f1f1f] text-white w-72">
+            <p className="px-2 py-1.5 text-[10px] uppercase tracking-widest text-[#555] font-normal">
+              Notifications
+            </p>
+            <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <Bell className="h-5 w-5 text-[#333]" />
+              <p className="text-sm text-[#555]">No new notifications</p>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -123,19 +145,16 @@ export function Topbar({
             align="end"
             className="bg-[#0a0a0a] border-[#1f1f1f] text-white w-80"
           >
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-[#666] font-normal">
+            <p className="px-2 py-1.5 text-[10px] uppercase tracking-widest text-[#666] font-normal">
               View as · demo role switcher
-            </DropdownMenuLabel>
+            </p>
             <DropdownMenuSeparator className="bg-[#1f1f1f]" />
             {ALL_ROLES.map((r) => {
               const active = r === role;
               return (
                 <DropdownMenuItem
                   key={r}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    switchRole(r);
-                  }}
+                  onClick={() => switchRole(r)}
                   className="focus:bg-[#111] focus:text-white py-2.5 cursor-pointer"
                 >
                   <div className="flex items-start gap-2 w-full">

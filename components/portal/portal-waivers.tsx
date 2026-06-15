@@ -133,14 +133,14 @@ export function PortalWaivers({
       {/* ── Optional unsigned templates ── */}
       {unsignedOptional.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xs font-medium text-[#555] uppercase tracking-widest">
+          <h2 className="text-xs font-medium text-[#9CA3AF] uppercase tracking-widest">
             Optional Waivers
           </h2>
           <div className="rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] divide-y divide-[#111] overflow-hidden">
             {unsignedOptional.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="h-4 w-4 text-[#555] shrink-0" />
+                  <FileText className="h-4 w-4 text-[#9CA3AF] shrink-0" />
                   <p className="text-sm text-white truncate">{t.name}</p>
                 </div>
                 <button
@@ -171,10 +171,10 @@ export function PortalWaivers({
       {/* ── No templates at all ── */}
       {templates.length === 0 && (
         <div className="rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] py-12 flex flex-col items-center gap-3 text-center">
-          <FileSignature className="h-8 w-8 text-[#444]" />
+          <FileSignature className="h-8 w-8 text-[#9CA3AF]" />
           <div>
             <p className="text-sm text-white">No waiver templates yet</p>
-            <p className="text-xs text-[#555] mt-0.5">
+            <p className="text-xs text-[#9CA3AF] mt-0.5">
               Your gym hasn&apos;t set up any waiver templates.
             </p>
           </div>
@@ -185,10 +185,10 @@ export function PortalWaivers({
       {signedWaivers.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-medium text-[#555] uppercase tracking-widest">
+            <h2 className="text-xs font-medium text-[#9CA3AF] uppercase tracking-widest">
               Signed Waivers
             </h2>
-            <span className="text-xs text-[#444]">{signedWaivers.length} total</span>
+            <span className="text-xs text-[#9CA3AF]">{signedWaivers.length} total</span>
           </div>
 
           <div className="rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] divide-y divide-[#111] overflow-hidden">
@@ -201,7 +201,7 @@ export function PortalWaivers({
                   <p className="text-sm text-white truncate">
                     {waiverTypeLabel(w.waiver_type)}
                   </p>
-                  <p className="text-xs text-[#555]">
+                  <p className="text-xs text-[#9CA3AF]">
                     {formatDate(w.signed_at)}
                     {w.signed_by_name ? ` · ${w.signed_by_name}` : ""}
                   </p>
@@ -210,7 +210,7 @@ export function PortalWaivers({
                   {w.signature_data && (
                     <button
                       onClick={() => setViewingWaiver(w)}
-                      className="h-8 w-8 grid place-items-center rounded-lg border border-[#222] text-[#666] hover:text-white hover:bg-[#111] transition-colors"
+                      className="h-8 w-8 grid place-items-center rounded-lg border border-[#222] text-[#9CA3AF] hover:text-white hover:bg-[#111] transition-colors"
                       title="View signature"
                     >
                       <Eye className="h-3.5 w-3.5" />
@@ -236,7 +236,7 @@ export function PortalWaivers({
           {signedWaivers.length > 5 && (
             <button
               onClick={() => setShowAllSigned((v) => !v)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-[#666] hover:text-white py-2 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-[#9CA3AF] hover:text-white py-2 transition-colors"
             >
               {showAllSigned ? (
                 <>
@@ -280,7 +280,7 @@ export function PortalWaivers({
                 value={signedByName}
                 onChange={(e) => setSignedByName(e.target.value)}
                 placeholder={studentName}
-                className="w-full rounded-lg border border-[#222] bg-black text-white text-sm px-3 py-2 placeholder:text-[#555] focus:outline-none focus:ring-1 focus:ring-white/30"
+                className="w-full rounded-lg border border-[#222] bg-black text-white text-sm px-3 py-2 placeholder:text-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-white/30"
               />
             </div>
 
@@ -291,7 +291,7 @@ export function PortalWaivers({
                   type="button"
                   onClick={onClear}
                   disabled={!hasInk}
-                  className="text-xs text-[#666] hover:text-white disabled:opacity-30 transition-colors"
+                  className="text-xs text-[#9CA3AF] hover:text-white disabled:opacity-30 transition-colors"
                 >
                   Clear
                 </button>
@@ -301,7 +301,7 @@ export function PortalWaivers({
                 heightClassName="h-48"
                 onInkChange={setHasInk}
               />
-              <p className="text-[10px] text-[#555] leading-relaxed">
+              <p className="text-[10px] text-[#9CA3AF] leading-relaxed">
                 By signing, I acknowledge the gym&apos;s waiver terms and
                 assume responsibility for the risks of participation. This
                 constitutes a legally binding electronic signature.
@@ -354,7 +354,7 @@ export function PortalWaivers({
               </div>
               <button
                 onClick={() => setViewingWaiver(null)}
-                className="h-8 w-8 grid place-items-center rounded-lg border border-[#222] text-[#666] hover:text-white transition-colors"
+                className="h-8 w-8 grid place-items-center rounded-lg border border-[#222] text-[#9CA3AF] hover:text-white transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>

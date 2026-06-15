@@ -3,6 +3,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requirePermission } from "@/lib/auth/current-role";
+import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -259,6 +261,51 @@ export async function listStudentsForGym(gymId: string): Promise<StudentOption[]
     full_name: s.full_name ?? "Unknown",
     email: s.email ?? "",
   }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner/Admin – delete an entire thread (messages + participants + conversation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function deleteConversation(
+  conversationId: string,
+  gymId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Authorised if the caller has delete_thread permission OR is a platform admin
+  const [permCheck, isPA] = await Promise.all([
+    requirePermission("delete_thread"),
+    isPlatformAdmin(),
+  ]);
+  if (!permCheck.ok && !isPA) {
+    return { ok: false, error: "You don't have permission to delete threads." };
+  }
+
+  const admin = createAdminClient() as any;
+
+  // Confirm the conversation belongs to this gym before touching anything
+  const { data: conv } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("gym_id", gymId)
+    .maybeSingle();
+
+  if (!conv) return { ok: false, error: "Conversation not found." };
+
+  // Delete in dependency order so FK constraints are satisfied
+  await admin.from("messages").delete().eq("conversation_id", conversationId);
+  await admin.from("conversation_participants").delete().eq("conversation_id", conversationId);
+
+  const { error } = await admin
+    .from("conversations")
+    .delete()
+    .eq("id", conversationId)
+    .eq("gym_id", gymId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/messages");
+  return { ok: true };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

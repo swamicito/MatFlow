@@ -2,11 +2,11 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, Loader2, Sparkles, RefreshCw, Users, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Sparkles, RefreshCw, Users, ChevronDown, ChevronUp, Check, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { sendOwnerMessage } from "@/app/(dashboard)/messages/actions";
+import { sendOwnerMessage, deleteConversation } from "@/app/(dashboard)/messages/actions";
 import { MESSAGE_TEMPLATES } from "@/lib/message-templates";
 import type { ConversationDetail } from "@/app/(dashboard)/messages/actions";
 
@@ -59,15 +59,19 @@ function formatDateDivider(iso: string): string {
 export function ConversationThread({
   detail,
   gymId,
+  canDelete = false,
 }: {
   detail: ConversationDetail;
   gymId: string;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [content, setContent] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -93,6 +97,19 @@ export function ConversationThread({
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend();
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const r = await deleteConversation(detail.id, gymId);
+    if (!r.ok) {
+      toast.error(r.error);
+      setDeleting(false);
+      setShowDeleteModal(false);
+      return;
+    }
+    toast.success("Thread deleted");
+    router.push("/messages");
   }
 
   const title = detail.subject || participantLabel(detail.participants);
@@ -132,12 +149,24 @@ export function ConversationThread({
             </button>
           </div>
 
-          <button
-            onClick={() => router.refresh()}
-            className="h-8 w-8 grid place-items-center rounded-full text-[#333] hover:text-white hover:bg-[#111] transition-colors shrink-0"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => router.refresh()}
+              className="h-8 w-8 grid place-items-center rounded-full text-[#333] hover:text-white hover:bg-[#111] transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="h-8 w-8 grid place-items-center rounded-full text-[#333] hover:text-red-400 hover:bg-[#111] transition-colors"
+                title="Delete thread"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Collapsible participants */}
@@ -317,6 +346,47 @@ export function ConversationThread({
         </div>
         <p className="text-[10px] text-[#2a2a2a] text-right pb-1">⌘↵ to send</p>
       </div>
+
+      {/* ── Delete confirmation modal ── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#0a0a0a] border border-[#1f1f1f] rounded-2xl shadow-2xl p-6 space-y-5">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-red-500/10 border border-red-500/20 grid place-items-center">
+                <Trash2 className="h-5 w-5 text-red-400" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-base font-bold text-white">Delete this thread?</h2>
+                <p className="text-sm text-[#555] truncate max-w-[260px]">{title}</p>
+              </div>
+              <div className="w-full rounded-xl border border-[#1a1a1a] bg-[#0f0f0f] px-4 py-3 text-xs text-[#555] text-center leading-relaxed">
+                Permanently deletes{" "}
+                <span className="text-white font-medium">{detail.messages.length} message{detail.messages.length !== 1 ? "s" : ""}</span>{" "}
+                and all participants.{" "}
+                <span className="text-red-400/80">This cannot be undone.</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 h-10 rounded-xl border border-[#1f1f1f] text-sm text-[#888] hover:text-white hover:border-[#2a2a2a] transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 h-10 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Delete thread
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

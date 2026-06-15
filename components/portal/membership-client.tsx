@@ -20,7 +20,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   active:    { label: "Active",    cls: "border-emerald-500/30 text-emerald-400" },
   trialing:  { label: "Trial",     cls: "border-blue-500/30 text-blue-400" },
   paused:    { label: "Paused",    cls: "border-amber-500/30 text-amber-400" },
-  cancelled: { label: "Cancelled", cls: "border-[#333] text-[#555]" },
+  cancelled: { label: "Cancelled", cls: "border-[#333] text-[#9CA3AF]" },
   past_due:  { label: "Past Due",  cls: "border-red-500/30 text-red-400" },
 };
 
@@ -47,14 +47,14 @@ export function MembershipClient({
       {/* ── Credits ── */}
       <div className="grid grid-cols-2 gap-3">
         <div className={cn("rounded-xl border bg-[#0a0a0a] p-4 space-y-1", credits.class_credits > 0 ? "border-white/15" : "border-[#1a1a1a]")}>
-          <div className="flex items-center gap-1.5 text-xs text-[#555]">
+          <div className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
             <CreditCard className="h-3.5 w-3.5" /> Class Credits
           </div>
           <p className="text-4xl font-bold text-white">{credits.class_credits}</p>
-          <p className="text-xs text-[#444]">remaining</p>
+          <p className="text-xs text-[#9CA3AF]">remaining</p>
         </div>
         <div className={cn("rounded-xl border bg-[#0a0a0a] p-4 space-y-1", credits.gift_card_balance_cents > 0 ? "border-white/15" : "border-[#1a1a1a]")}>
-          <div className="flex items-center gap-1.5 text-xs text-[#555]">
+          <div className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
             <Gift className="h-3.5 w-3.5" /> Gift Card
           </div>
           <p className="text-4xl font-bold text-white">
@@ -62,7 +62,7 @@ export function MembershipClient({
               ? formatCents(credits.gift_card_balance_cents)
               : "$0"}
           </p>
-          <p className="text-xs text-[#444]">balance</p>
+          <p className="text-xs text-[#9CA3AF]">balance</p>
         </div>
       </div>
 
@@ -75,11 +75,11 @@ export function MembershipClient({
       ) : (
         <section className="rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] py-12 flex flex-col items-center gap-4">
           <div className="h-14 w-14 grid place-items-center rounded-2xl border border-[#222] bg-black">
-            <ShoppingBag className="h-6 w-6 text-[#444]" />
+            <ShoppingBag className="h-6 w-6 text-[#9CA3AF]" />
           </div>
           <div className="text-center space-y-1">
             <p className="text-sm font-medium text-white">No active membership</p>
-            <p className="text-xs text-[#555]">
+            <p className="text-xs text-[#9CA3AF]">
               Talk to your gym about getting set up on a plan.
             </p>
           </div>
@@ -89,15 +89,15 @@ export function MembershipClient({
       {/* ── Past memberships ── */}
       {historicalMemberships.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-medium text-[#555]">Past Plans</h2>
+          <h2 className="text-sm font-medium text-[#9CA3AF]">Past Plans</h2>
           <div className="divide-y divide-[#111] rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] overflow-hidden">
             {historicalMemberships.map((m) => {
-              const meta = STATUS_META[m.status] ?? { label: m.status, cls: "border-[#333] text-[#555]" };
+              const meta = STATUS_META[m.status] ?? { label: m.status, cls: "border-[#333] text-[#9CA3AF]" };
               return (
                 <div key={m.id} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{m.plan_name}</p>
-                    <p className="text-xs text-[#555]">
+                    <p className="text-xs text-[#9CA3AF]">
                       Started {new Date(m.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </p>
                   </div>
@@ -123,7 +123,7 @@ function ActiveMembershipCard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const meta = STATUS_META[membership.status] ?? { label: membership.status, cls: "border-[#333] text-[#555]" };
+  const meta = STATUS_META[membership.status] ?? { label: membership.status, cls: "border-[#333] text-[#9CA3AF]" };
 
   function handleManage() {
     startTransition(async () => {
@@ -146,7 +146,7 @@ function ActiveMembershipCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-base font-semibold text-white">{membership.plan_name}</p>
-          <p className="text-xs text-[#555]">
+          <p className="text-xs text-[#9CA3AF]">
             Started{" "}
             {new Date(membership.start_date).toLocaleDateString("en-US", {
               month: "long",
@@ -163,9 +163,9 @@ function ActiveMembershipCard({
       {/* Renewal date */}
       {membership.current_period_end && (
         <div className="rounded-lg border border-[#1a1a1a] bg-black px-4 py-3 flex items-center gap-2">
-          <RefreshCw className="h-3.5 w-3.5 text-[#555] shrink-0" />
+          <RefreshCw className="h-3.5 w-3.5 text-[#9CA3AF] shrink-0" />
           <div>
-            <p className="text-xs text-[#555]">Next billing date</p>
+            <p className="text-xs text-[#9CA3AF]">Next billing date</p>
             <p className="text-sm font-medium text-white">
               {new Date(membership.current_period_end).toLocaleDateString("en-US", {
                 weekday: "short",
@@ -194,7 +194,7 @@ function ActiveMembershipCard({
         )}
       </button>
 
-      <div className="flex items-start gap-1.5 text-[11px] text-[#444]">
+      <div className="flex items-start gap-1.5 text-[11px] text-[#9CA3AF]">
         <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
         <span>You&apos;ll be redirected to a secure Stripe page to update your payment method, view invoices, or cancel your subscription.</span>
       </div>

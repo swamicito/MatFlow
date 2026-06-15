@@ -18,10 +18,10 @@ export default async function ProtectedAdminLayout({
       {/* ── Top bar ── */}
       <header className="shrink-0 h-14 border-b border-[#111] flex items-center gap-4 px-6">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-[#555]" />
+          <ShieldCheck className="h-4 w-4 text-[#9CA3AF]" />
           <span className="text-sm font-semibold text-white">Platform Admin</span>
-          <span className="mx-2 text-[#222]">·</span>
-          <span className="text-xs text-[#444] font-mono tracking-wide">MatFlow</span>
+          <span className="mx-2 text-[#555]">·</span>
+          <span className="text-xs text-[#9CA3AF] font-mono tracking-wide">MatFlow</span>
         </div>
 
         <nav className="flex items-center gap-1 ml-4">
@@ -44,7 +44,7 @@ export default async function ProtectedAdminLayout({
         <div className="ml-auto flex items-center gap-4">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs text-[#555] hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-[#9CA3AF] hover:text-white transition-colors"
           >
             <LayoutDashboard className="h-3.5 w-3.5" />
             Back to Dashboard
@@ -52,7 +52,7 @@ export default async function ProtectedAdminLayout({
           <form action={logoutPlatformAdmin}>
             <button
               type="submit"
-              className="text-xs text-[#444] hover:text-red-400 transition-colors"
+              className="text-xs text-[#9CA3AF] hover:text-red-400 transition-colors"
             >
               Sign out
             </button>

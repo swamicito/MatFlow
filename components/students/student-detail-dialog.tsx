@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Check,
   Download,
   Eye,
@@ -233,6 +234,19 @@ export function StudentDetailDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 pb-8 space-y-6 pt-4">
+
+        {/* No-waiver warning */}
+        {waivers.length === 0 && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-300">No waiver on file</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">
+                This student has never signed a liability waiver. Use the Waivers section below to collect a signature before their next session.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Basic info */}
         <section className="space-y-4">

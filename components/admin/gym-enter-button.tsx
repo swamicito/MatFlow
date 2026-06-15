@@ -1,26 +1,29 @@
 "use client";
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { LogIn, Loader2 } from "lucide-react";
 import { adminSwitchGym } from "@/app/admin/actions";
 
 export function GymEnterButton({ gymId }: { gymId: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
-  function handleEnter() {
-    startTransition(async () => {
-      const r = await adminSwitchGym(gymId);
-      if (r.ok) router.push("/dashboard");
-    });
+  async function handleEnter() {
+    if (pending) return;
+    setPending(true);
+    const r = await adminSwitchGym(gymId);
+    if (r.ok) {
+      // Hard navigation so the new gym cookie is picked up immediately
+      window.location.href = "/dashboard";
+    } else {
+      setPending(false);
+    }
   }
 
   return (
     <button
       onClick={handleEnter}
       disabled={pending}
-      className="h-8 px-3 rounded-lg border border-[#1f1f1f] text-xs text-[#666] hover:text-white hover:border-[#2a2a2a] transition-colors inline-flex items-center gap-1.5 disabled:opacity-40 shrink-0"
+      className="h-8 px-3 rounded-lg border border-[#374151] text-xs text-[#9CA3AF] hover:text-white hover:border-[#4B5563] transition-colors inline-flex items-center gap-1.5 disabled:opacity-40 shrink-0"
     >
       {pending ? (
         <Loader2 className="h-3 w-3 animate-spin" />

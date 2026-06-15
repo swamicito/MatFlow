@@ -145,6 +145,22 @@ export async function createGymWithSeed(
   return { ok: true, data: { id: gymId, name, slug, plansSeeded } };
 }
 
+// ── Slug availability check ───────────────────────────────────────────────────
+
+export async function checkSlugAvailable(
+  slug: string,
+): Promise<{ available: boolean }> {
+  if (!slug || slug.length < 2) return { available: false };
+  if (!(await isPlatformAdmin())) return { available: false };
+  const supabase = createAdminClient() as any;
+  const { data } = await supabase
+    .from("gyms")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  return { available: !data };
+}
+
 // ── Switch active gym ─────────────────────────────────────────────────────────
 
 export async function adminSwitchGym(

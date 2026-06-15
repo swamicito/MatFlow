@@ -8,7 +8,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -95,9 +94,9 @@ export function GymSwitcher({
           align="start"
           className="bg-[#0a0a0a] border-[#1f1f1f] text-white w-64"
         >
-          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-[#555] font-normal">
+          <p className="px-2 py-1.5 text-[10px] uppercase tracking-widest text-[#555] font-normal">
             Your Gyms
-          </DropdownMenuLabel>
+          </p>
           <DropdownMenuSeparator className="bg-[#1f1f1f]" />
 
           {gyms.map((gym) => {
@@ -105,7 +104,7 @@ export function GymSwitcher({
             return (
               <DropdownMenuItem
                 key={gym.id}
-                onSelect={(e) => { e.preventDefault(); onSwitch(gym.id); }}
+                onClick={() => onSwitch(gym.id)}
                 className="focus:bg-[#111] focus:text-white py-2.5 cursor-pointer"
               >
                 <div className="flex items-center gap-2 w-full">
@@ -125,7 +124,7 @@ export function GymSwitcher({
 
           <DropdownMenuSeparator className="bg-[#1f1f1f]" />
           <DropdownMenuItem
-            onSelect={(e) => { e.preventDefault(); setShowCreate(true); }}
+            onClick={() => setShowCreate(true)}
             className="focus:bg-[#111] focus:text-white py-2.5 cursor-pointer"
           >
             <div className="flex items-center gap-2">

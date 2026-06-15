@@ -16,7 +16,7 @@ export default async function AdminGymsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">All Gyms</h1>
-          <p className="text-sm text-[#555] mt-1">
+          <p className="text-sm text-[#9CA3AF] mt-1">
             {gyms.length} gym{gyms.length !== 1 ? "s" : ""} in the system
           </p>
         </div>
@@ -33,11 +33,11 @@ export default async function AdminGymsPage() {
       {gyms.length === 0 ? (
         <div className="border border-[#1a1a1a] rounded-2xl py-20 flex flex-col items-center gap-4 text-center">
           <div className="h-12 w-12 rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] grid place-items-center">
-            <Building2 className="h-6 w-6 text-[#333]" />
+            <Building2 className="h-6 w-6 text-[#6B7280]" />
           </div>
           <div>
             <p className="text-sm font-medium text-[#888]">No gyms yet</p>
-            <p className="text-xs text-[#555] mt-1">Create one to get started.</p>
+            <p className="text-xs text-[#9CA3AF] mt-1">Create one to get started.</p>
           </div>
           <Link
             href="/admin/gyms/new"
@@ -55,18 +55,18 @@ export default async function AdminGymsPage() {
               className="flex items-center gap-4 px-5 py-4 hover:bg-[#050505] transition-colors group"
             >
               <div className="h-9 w-9 rounded-lg border border-[#1a1a1a] bg-[#0a0a0a] grid place-items-center shrink-0">
-                <Building2 className="h-4 w-4 text-[#444]" />
+                <Building2 className="h-4 w-4 text-[#9CA3AF]" />
               </div>
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">{gym.name}</p>
-                <p className="text-xs text-[#444] font-mono mt-0.5">{gym.slug}</p>
+                <p className="text-xs text-[#9CA3AF] font-mono mt-0.5">{gym.slug}</p>
               </div>
 
               {/* Meta */}
               <div className="hidden md:flex items-center gap-4 shrink-0 text-[11px]">
-                <span className="text-[#444]">{gym.timezone}</span>
-                <span className="text-[#333]">
+                <span className="text-[#9CA3AF]">{gym.timezone}</span>
+                <span className="text-[#6B7280]">
                   {new Date(gym.created_at).toLocaleDateString("en-US", {
                     month: "short", day: "numeric", year: "numeric",
                   })}

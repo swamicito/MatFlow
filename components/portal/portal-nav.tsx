@@ -29,7 +29,7 @@ export function PortalNav() {
               href={href}
               className={cn(
                 "flex flex-col items-center justify-center flex-1 py-1 transition-all active:scale-95",
-                active ? "text-white" : "text-[#666]"
+                active ? "text-white" : "text-[#9CA3AF]"
               )}
             >
               <Icon 

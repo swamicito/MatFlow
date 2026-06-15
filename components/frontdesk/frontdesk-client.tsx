@@ -15,9 +15,10 @@ import {
   Users,
   LayoutDashboard,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkInStudent } from "@/app/frontdesk/actions";
+import { checkInStudent, appendStudentNote } from "@/app/frontdesk/actions";
 import { createStudent, saveWaiver } from "@/app/(dashboard)/students/actions";
 import { DEFAULT_CLASS, relativeTime } from "@/lib/checkin";
 import { ADULT_BELTS, BELT_LABEL } from "@/lib/students";
@@ -73,10 +74,11 @@ export function FrontdeskClient({
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
-  const [success, setSuccess] = useState<{ name: string } | null>(null);
+  const [success, setSuccess] = useState<{ name: string; context: "checkin" | "new-client" } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
   const [showTodayList, setShowTodayList] = useState(false);
+  const [warnTarget, setWarnTarget] = useState<CheckinStudent | null>(null);
 
   // New-client form
   const [nc, setNc] = useState({
@@ -135,13 +137,18 @@ export function FrontdeskClient({
     setError(null);
   }
 
-  function handleCheckIn(studentId: string) {
+  function handleCheckIn(student: CheckinStudent) {
     if (pending) return;
+    if (!student.has_waiver) { setWarnTarget(student); return; }
+    doCheckIn(student.id);
+  }
+
+  function doCheckIn(studentId: string) {
     setError(null);
     startTransition(async () => {
       const r = await checkInStudent(studentId, DEFAULT_CLASS);
       if (!r.ok) { setError(r.error); return; }
-      setSuccess({ name: r.data.student_name });
+      setSuccess({ name: r.data.student_name, context: "checkin" });
       setQuery("");
       router.refresh();
     });
@@ -173,10 +180,19 @@ export function FrontdeskClient({
 
   function handleSkipWaiver() {
     if (!pendingStudent) return;
-    setSuccess({ name: pendingStudent.name });
+    const student = pendingStudent;
+    setError(null);
     setPendingStudent(null);
     switchMode("search");
-    router.refresh();
+    const skipNote = `⚠ Waiver skipped at front desk on ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}. Follow up required.`;
+    startTransition(async () => {
+      await Promise.all([
+        checkInStudent(student.id, DEFAULT_CLASS),
+        appendStudentNote(student.id, skipNote),
+      ]);
+      setSuccess({ name: student.name, context: "new-client" });
+      router.refresh();
+    });
   }
 
   function handleSaveWaiver() {
@@ -194,7 +210,8 @@ export function FrontdeskClient({
         template_id: waiverTemplateId || null,
       });
       if (!r.ok) { setError(r.error); return; }
-      setSuccess({ name: pendingStudent.name });
+      await checkInStudent(pendingStudent.id, DEFAULT_CLASS);
+      setSuccess({ name: pendingStudent.name, context: "new-client" });
       setPendingStudent(null);
       setSwHasInk(false);
       switchMode("search");
@@ -333,13 +350,26 @@ export function FrontdeskClient({
                     filtered.map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center gap-4 h-[72px] px-5 rounded-2xl bg-[#080808] border border-[#1a1a1a] hover:border-[#2a2a2a] transition-colors"
+                        className={cn(
+                          "flex items-center gap-4 h-[72px] px-5 rounded-2xl bg-[#080808] border transition-colors",
+                          s.has_waiver
+                            ? "border-[#1a1a1a] hover:border-[#2a2a2a]"
+                            : "border-amber-500/20 hover:border-amber-500/40",
+                        )}
                       >
                         <BeltBadge belt={(s.belt_rank ?? "white") as BeltRank} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-base font-semibold text-white truncate">
-                            {s.full_name}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-base font-semibold text-white truncate">
+                              {s.full_name}
+                            </p>
+                            {!s.has_waiver && (
+                              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded-full px-2 py-0.5">
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                No Waiver
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-[#555] truncate">
                             {s.phone ? `${s.phone}  ·  ` : ""}
                             {s.last_checked_in_at
@@ -348,7 +378,7 @@ export function FrontdeskClient({
                           </p>
                         </div>
                         <button
-                          onClick={() => handleCheckIn(s.id)}
+                          onClick={() => handleCheckIn(s)}
                           disabled={pending}
                           className="h-11 px-6 rounded-xl bg-white text-black text-sm font-bold hover:bg-white/90 active:scale-95 transition-all disabled:opacity-40 inline-flex items-center gap-2 shrink-0"
                         >
@@ -544,11 +574,16 @@ export function FrontdeskClient({
                       key={c.attendance_id}
                       className="flex items-center justify-between px-5 py-2.5 border-b border-[#0d0d0d] last:border-0"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm text-white truncate">{c.student_name}</p>
-                        {c.class_type && (
-                          <p className="text-[11px] text-[#555] truncate">{c.class_type}</p>
+                      <div className="min-w-0 flex items-center gap-1.5">
+                        {!c.has_waiver && (
+                          <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
                         )}
+                        <div className="min-w-0">
+                          <p className="text-sm text-white truncate">{c.student_name}</p>
+                          {c.class_type && (
+                            <p className="text-[11px] text-[#555] truncate">{c.class_type}</p>
+                          )}
+                        </div>
                       </div>
                       <span className="text-xs text-[#666] tabular-nums ml-3 shrink-0 whitespace-nowrap">
                         {relativeTime(c.checked_in_at)}
@@ -651,6 +686,39 @@ export function FrontdeskClient({
         </div>
       </div>
 
+      {/* ── No-waiver warning overlay ── */}
+      {warnTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/92 backdrop-blur-sm">
+          <div className="w-full max-w-sm mx-auto px-6 space-y-6 text-center">
+            <div className="mx-auto h-20 w-20 rounded-full bg-amber-500/15 border-2 border-amber-500/50 grid place-items-center">
+              <AlertTriangle className="h-10 w-10 text-amber-400" strokeWidth={2} />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">{warnTarget.full_name}</p>
+              <p className="text-base text-amber-300 mt-2 font-semibold">No waiver on file</p>
+              <p className="text-sm text-[#888] mt-1">
+                This student has never signed a liability waiver.
+                Checking them in may create legal exposure.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setWarnTarget(null)}
+                className="flex-1 h-12 rounded-2xl border border-[#333] text-sm text-[#aaa] hover:text-white hover:border-[#555] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { const id = warnTarget.id; setWarnTarget(null); doCheckIn(id); }}
+                className="flex-1 h-12 rounded-2xl bg-amber-500 text-black text-sm font-bold hover:bg-amber-400 active:scale-[0.98] transition-all"
+              >
+                Check In Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Success overlay ── */}
       {success && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/92 backdrop-blur-sm">
@@ -660,7 +728,11 @@ export function FrontdeskClient({
             </div>
             <div>
               <p className="text-5xl font-bold tracking-tight text-white">{success.name}</p>
-              <p className="text-xl text-[#888] mt-3">Checked in successfully</p>
+              <p className="text-xl text-[#888] mt-3">
+                {success.context === "new-client"
+                  ? "Student created & checked in"
+                  : "Checked in successfully"}
+              </p>
             </div>
           </div>
         </div>
