@@ -120,7 +120,7 @@ function LoginForm() {
         </form>
 
         <p className="text-center text-[11px] text-[#555] leading-relaxed">
-          We'll email you a magic link — no password needed.
+          We&apos;ll email you a magic link — no password needed.
           <br />Works for students, coaches, and gym owners.
         </p>
 
