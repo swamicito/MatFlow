@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     if (gymError || !gym) {
       return NextResponse.json(
-        { success: false, error: "Asbury Park gym not found" },
+        { success: false, error: "Gym not found" },
         { status: 500 }
       );
     }

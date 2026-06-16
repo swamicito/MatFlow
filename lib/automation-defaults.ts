@@ -163,7 +163,7 @@ export const RULE_BY_KEY: Record<AutomationRuleKey, RuleDefinition> =
  * see how a rendered message will look without needing real recipient data.
  */
 export const PREVIEW_VARS: Record<string, string> = {
-  gym_name: "Asbury Park Jiu-Jitsu",
+  gym_name: "Method Jiu-Jitsu",
   student_name: "Carlos Silva",
   first_name: "Carlos",
   class_name: "Tuesday 7pm Adult No-Gi",

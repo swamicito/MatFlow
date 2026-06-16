@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Loader2, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  no_account:    "This email isn't linked to any account. Contact your gym to get set up.",
   no_student:    "No student account found for that email. Contact your gym to get set up.",
   no_user:       "Sign-in failed. Please try again.",
   missing_code:  "Invalid sign-in link — request a new one below.",
@@ -81,8 +82,8 @@ function LoginForm() {
           <div className="flex justify-center mb-6">
             <img src="/logo-full.png" alt="MatFlow" className="h-16 md:h-20 w-auto" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Student Portal</h1>
-          <p className="text-[#9CA3AF] text-sm mt-2">Sign in with your email to get started</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Sign in to MatFlow</h1>
+          <p className="text-[#9CA3AF] text-sm mt-2">Enter your email to receive a sign-in link</p>
         </div>
 
         {/* Email form */}
@@ -119,8 +120,8 @@ function LoginForm() {
         </form>
 
         <p className="text-center text-[11px] text-[#555] leading-relaxed">
-          We will email you a magic link — no password needed.
-          <br />Your email must match a student record at your gym.
+          We'll email you a magic link — no password needed.
+          <br />Works for students, coaches, and gym owners.
         </p>
 
       </div>

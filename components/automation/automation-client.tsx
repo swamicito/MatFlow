@@ -588,7 +588,7 @@ function PreviewDialog({
         <DialogHeader>
           <DialogTitle>Preview · {def.name}</DialogTitle>
           <DialogDescription className="text-[#888]">
-            Rendered with sample variables (Carlos · Asbury Park Jiu-Jitsu).
+            Rendered with sample variables (Carlos · Method Jiu-Jitsu).
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue={rule.channel_email ? "email" : "sms"}>

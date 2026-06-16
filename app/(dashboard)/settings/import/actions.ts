@@ -141,7 +141,7 @@ export async function runImport(req: ImportRequest): Promise<ImportResult> {
       dryRun: req.dryRun,
       totals: baseTotals,
       rows: [],
-      fatal: 'Asbury Park gym not found. Insert a row with slug = "asbury-park".',
+      fatal: 'No active gym found. Make sure you have a gym configured.',
     };
   }
 

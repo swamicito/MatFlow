@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Check, ChevronDown, Search, ShieldCheck, Menu, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Dumbbell, Search, ShieldCheck, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -33,16 +33,25 @@ export function Topbar({
   role,
   gyms,
   activeGymId,
+  studentId,
 }: {
   role: UserRole;
   gyms: GymOption[];
   activeGymId: string | null;
+  /** Non-null when the current staff user also has a linked student record (dual-role). */
+  studentId?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  const activeGym = gyms.find((g) => g.id === activeGymId) ?? gyms[0];
+  // Compute initials from the active gym name (e.g. "Method Jiu-Jitsu" → "MJ")
+  const gymInitials = activeGym?.name
+    ? activeGym.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+    : "MF";
 
   const visibleItems = navItems.filter((item) => can(role, item.requires));
 
@@ -98,6 +107,17 @@ export function Topbar({
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         <GymSwitcher gyms={gyms} activeGymId={activeGymId} />
 
+        {/* My Training — shown only for dual-role users (owners/coaches who also train) */}
+        {studentId && (
+          <Link
+            href="/portal"
+            className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[#1a1a1a] bg-[#060606] text-xs text-[#9CA3AF] hover:text-white hover:bg-[#111] hover:border-[#374151] transition-all shrink-0"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">My Training</span>
+          </Link>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Notifications"
@@ -127,7 +147,7 @@ export function Topbar({
           >
             <Avatar className="h-7 w-7 border border-[#222]">
               <AvatarFallback className="bg-[#111] text-white text-xs">
-                AP
+                {gymInitials}
               </AvatarFallback>
             </Avatar>
             <span

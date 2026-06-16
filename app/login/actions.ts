@@ -62,7 +62,7 @@ export async function testLoginAsSteve() {
     .single();
 
   if (!gym?.id) {
-    return { success: false, error: "Asbury Park gym not found" };
+    return { success: false, error: "Gym not found" };
   }
 
   const gymId = gym.id;

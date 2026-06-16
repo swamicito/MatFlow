@@ -6,9 +6,33 @@ import { Building2 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentRole } from "@/lib/auth/current-role";
 import { getCurrentGymId, listUserGyms, type GymContext } from "@/lib/auth/current-gym";
 import { GymSelectButton } from "@/components/layout/gym-select-button";
+
+/**
+ * Looks up whether the currently authenticated Supabase user is also linked
+ * to a student record. Returns their student_id or null.
+ * Used to decide whether to show the 'My Training' button in the topbar.
+ */
+async function getSessionStudentId(): Promise<string | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("student_auth")
+      .select("student_id")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    return (data?.student_id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // Accepts an already-resolved gymId so we never call getCurrentGymId() twice.
 async function isOnboardingComplete(gymId: string): Promise<boolean> {
@@ -81,10 +105,11 @@ export default async function DashboardLayout({
   // Resolve all context in one parallel fetch.
   // getCurrentGymId() is called exactly once — the result is shared with
   // isOnboardingComplete() and Topbar, eliminating the previous double-call.
-  const [role, gyms, gymId] = await Promise.all([
+  const [role, gyms, gymId, studentId] = await Promise.all([
     getCurrentRole(),
     listUserGyms(),
     getCurrentGymId(),
+    getSessionStudentId(),
   ]);
 
   // ── No active gym ──────────────────────────────────────────────────────────
@@ -113,7 +138,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar role={role} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar role={role} gyms={gyms} activeGymId={gymId} />
+        <Topbar role={role} gyms={gyms} activeGymId={gymId} studentId={studentId} />
         <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>
     </div>

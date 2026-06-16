@@ -473,7 +473,7 @@ function Step1({
           <Input
             value={gymName}
             onChange={(e) => setGymName(e.target.value)}
-            placeholder="Asbury Park Jiu-Jitsu"
+            placeholder="Method Jiu-Jitsu"
             className="bg-black border-[#222] text-white h-11"
           />
         </Field>
@@ -481,7 +481,7 @@ function Step1({
           <Input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="123 Main St, Asbury Park, NJ 07712"
+            placeholder="123 Main St, Neptune, NJ 07753"
             className="bg-black border-[#222] text-white h-11"
           />
         </Field>
@@ -729,7 +729,7 @@ function Step4({
       title={loaded ? "Demo data is loaded." : "Want to see how MatFlow works?"}
       description={
         loaded
-          ? "We've populated your workspace with a realistic Asbury Park roster. Explore Students, Leads, Billing, and Reports — clear it any time before going live."
+          ? "We've populated your workspace with a realistic Method Jiu-Jitsu roster. Explore Students, Leads, Billing, and Reports — clear it any time before going live."
           : "Load a realistic sample academy with 16 students, 4 families, 7 leads, and 4 plans. Perfect for exploring every screen before you add your own data."
       }
     >
