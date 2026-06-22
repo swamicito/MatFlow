@@ -81,13 +81,14 @@ function isLight(hex: string): boolean {
 export async function generateMetadata({
   params,
 }: {
-  params: { gymSlug: string };
+  params: Promise<{ gymSlug: string }>;
 }): Promise<Metadata> {
+  const { gymSlug } = await params;
   const admin = createAdminClient() as any;
   const { data: gym } = await admin
     .from("gyms")
     .select("name")
-    .eq("slug", params.gymSlug)
+    .eq("slug", gymSlug)
     .maybeSingle();
 
   const title = gym ? `${gym.name} — Class Schedule` : "Class Schedule";
@@ -239,9 +240,10 @@ function ClassCard({
 export default async function EmbedSchedulePage({
   params,
 }: {
-  params: { gymSlug: string };
+  params: Promise<{ gymSlug: string }>;
 }) {
-  const { gym, byDay, activeDays } = await fetchEmbedData(params.gymSlug);
+  const { gymSlug } = await params;
+  const { gym, byDay, activeDays } = await fetchEmbedData(gymSlug);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
 
   // ── Invalid slug → clean branded error state ───────────────────────────────
