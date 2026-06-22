@@ -217,8 +217,8 @@ function ClassFormDialog({
   function handleSubmit() {
     startTransition(async () => {
       const result = editing
-        ? await updateClass(editing.id, gymId, form)
-        : await createClass(gymId, form);
+        ? await updateClass(editing.id, form)
+        : await createClass(form);
 
       if (!result.ok) { toast.error(result.error); return; }
       toast.success(editing ? "Class updated" : "Class created");
@@ -379,7 +379,7 @@ function DeleteConfirmDialog({
 
   function handleDelete() {
     startTransition(async () => {
-      const result = await deleteClass(cls.id, gymId);
+      const result = await deleteClass(cls.id);
       if (!result.ok) { toast.error(result.error); return; }
       toast.success("Class deleted");
       router.refresh();
