@@ -36,7 +36,7 @@ export function PortalMessages({
             </span>
           )}
         </h1>
-        <p className="text-sm text-[#9CA3AF] mt-0.5">
+        <p className="text-sm text-[#555] mt-0.5">
           {conversations.length === 0 ? "No messages yet" : `${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}`}
         </p>
       </div>
@@ -44,11 +44,11 @@ export function PortalMessages({
       {conversations.length === 0 ? (
         <div className="rounded-2xl border border-[#1a1a1a] bg-[#080808] py-20 flex flex-col items-center gap-4">
           <div className="h-16 w-16 grid place-items-center rounded-2xl border border-[#1f1f1f] bg-[#0f0f0f]">
-            <MessageSquare className="h-7 w-7 text-[#6B7280]" />
+            <MessageSquare className="h-7 w-7 text-[#333]" />
           </div>
           <div className="text-center space-y-1">
             <p className="text-sm font-semibold text-white">No messages yet</p>
-            <p className="text-xs text-[#9CA3AF]">Your gym will reach out to you here.</p>
+            <p className="text-xs text-[#555]">Your gym will reach out to you here.</p>
           </div>
         </div>
       ) : (
@@ -78,7 +78,7 @@ export function PortalMessages({
                   </p>
                   <span className={cn(
                     "text-[11px] shrink-0 tabular-nums",
-                    c.unread_count > 0 ? "text-white font-medium" : "text-[#9CA3AF]",
+                    c.unread_count > 0 ? "text-white font-medium" : "text-[#444]",
                   )}>
                     {timeAgo(c.updated_at)}
                   </span>
@@ -86,10 +86,10 @@ export function PortalMessages({
                 <div className="flex items-center justify-between gap-2 mt-0.5">
                   <p className={cn(
                     "text-xs truncate",
-                    c.unread_count > 0 ? "text-[#aaa]" : "text-[#9CA3AF]",
+                    c.unread_count > 0 ? "text-[#aaa]" : "text-[#444]",
                   )}>
                     {c.last_message_sender === "student"
-                      ? <span className="text-[#9CA3AF]">You: </span>
+                      ? <span className="text-[#666]">You: </span>
                       : null}
                     {c.last_message ?? "No messages yet"}
                   </p>
@@ -101,7 +101,7 @@ export function PortalMessages({
                 </div>
               </div>
 
-              <ChevronRight className="h-4 w-4 text-[#6B7280] group-hover:text-[#9CA3AF] shrink-0 transition-colors" />
+              <ChevronRight className="h-4 w-4 text-[#2a2a2a] group-hover:text-[#444] shrink-0 transition-colors" />
             </button>
           ))}
         </div>

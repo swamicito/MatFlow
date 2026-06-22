@@ -1,30 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createAdminClient } from "@/lib/supabase/admin";
+import { extractUtmFromPayload } from "@/lib/utm-server";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: Record<string, any> = await request.json();
 
-    const name = body.name;
-    const email = body.email || null;
-    const phone = body.phone;
-    const source = body.source || "Website";
-    const notes = body.notes || null;
+    // ── Required fields ────────────────────────────────────────────────────
+    const name  = (body.name  ?? "").trim();
+    const phone = (body.phone ?? "").trim();
 
     if (!name || !phone) {
       return NextResponse.json(
-        { success: false, error: "Name and phone are required" },
-        { status: 400 }
+        { success: false, error: "name and phone are required" },
+        { status: 400 },
       );
     }
 
-    // Get the gym UUID
-    const { data: gym, error: gymError } = await supabase
+    const email  = (body.email  ?? null) || null;
+    const notes  = (body.notes  ?? null) || null;
+    // Allow the form to pass a custom source label; fall back to "Website".
+    const source = (body.source ?? "Website") || "Website";
+
+    // ── UTM + attribution extraction ───────────────────────────────────────
+    // extractUtmFromPayload checks for standard UTM names (utm_source, etc.)
+    // as well as camelCase and human-friendly variants sent by Webflow forms.
+    // It also auto-generates source_label from utm_source + utm_campaign.
+    const attribution = extractUtmFromPayload(body);
+
+    // ── Gym lookup ─────────────────────────────────────────────────────────
+    const supabase = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: gym, error: gymError } = await (supabase as any)
       .from("gyms")
       .select("id")
       .eq("slug", "asbury-park")
@@ -33,34 +41,45 @@ export async function POST(request: NextRequest) {
     if (gymError || !gym) {
       return NextResponse.json(
         { success: false, error: "Gym not found" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const { error } = await supabase.from("leads").insert({
+    // ── Insert lead ────────────────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertError } = await (supabase as any).from("leads").insert({
+      gym_id: gym.id,
       name,
       email,
       phone,
       source,
       notes,
       status: "new",
-      gym_id: gym.id,
+      // Attribution — all fields are null when not supplied by the form.
+      utm_source:   attribution.utm_source,
+      utm_medium:   attribution.utm_medium,
+      utm_campaign: attribution.utm_campaign,
+      utm_term:     attribution.utm_term,
+      utm_content:  attribution.utm_content,
+      landing_page: attribution.landing_page,
+      referrer:     attribution.referrer,
+      source_label: attribution.source_label,
     });
 
-    if (error) {
-      console.error("Supabase insert error:", error);
+    if (insertError) {
+      console.error("[webflow webhook] insert error:", insertError);
       return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 500 }
+        { success: false, error: insertError.message },
+        { status: 500 },
       );
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Webhook crash:", error);
+  } catch (err) {
+    console.error("[webflow webhook] crash:", err);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

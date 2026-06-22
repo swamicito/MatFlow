@@ -19,8 +19,10 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCurrentRole } from "@/lib/auth/current-role";
+import { getCurrentGymId } from "@/lib/auth/current-gym";
 import { can, type Permission } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ScheduleEmbedCard } from "@/components/settings/schedule-embed-card";
 
 type Tile = {
   href: string;
@@ -140,13 +142,24 @@ export default async function SettingsPage() {
   const tiles = TILES.filter((t) => can(role, t.requires));
 
   let gymCount = 0;
+  let activeGym: { name: string; slug: string } | null = null;
+
   if (can(role, "edit_settings")) {
     const admin = createAdminClient() as any;
-    const { count } = await admin
-      .from("gyms")
-      .select("id", { count: "exact", head: true });
-    gymCount = count ?? 0;
+    const activeGymId = await getCurrentGymId();
+
+    const [countRes, gymRes] = await Promise.all([
+      admin.from("gyms").select("id", { count: "exact", head: true }),
+      activeGymId
+        ? admin.from("gyms").select("name, slug").eq("id", activeGymId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    gymCount  = countRes.count ?? 0;
+    activeGym = gymRes.data ?? null;
   }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
 
   return (
     <div className="space-y-8">
@@ -200,6 +213,15 @@ export default async function SettingsPage() {
             +$79/month per additional gym &bull; One-time setup $349
           </p>
         </section>
+      )}
+
+      {/* ── Schedule Embed ── */}
+      {activeGym && (
+        <ScheduleEmbedCard
+          gymSlug={activeGym.slug}
+          gymName={activeGym.name}
+          siteUrl={siteUrl}
+        />
       )}
 
       {/* ── Platform Admin ── */}

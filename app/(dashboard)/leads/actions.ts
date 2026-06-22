@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
 import type { LeadStatus } from "@/lib/supabase/types";
 import { LEAD_STATUSES } from "@/lib/leads";
-import type { UtmParams } from "@/lib/utm";
+import type { LeadAttributionData } from "@/lib/utm-server";
 
 export type CreateLeadInput = {
   name: string;
@@ -14,7 +14,7 @@ export type CreateLeadInput = {
   phone?: string | null;
   source?: string | null;
   notes?: string | null;
-} & UtmParams;
+} & LeadAttributionData;
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -44,6 +44,9 @@ export async function createLead(input: CreateLeadInput): Promise<ActionResult> 
     utm_campaign: input.utm_campaign ?? null,
     utm_term:     input.utm_term     ?? null,
     utm_content:  input.utm_content  ?? null,
+    landing_page: input.landing_page ?? null,
+    referrer:     input.referrer     ?? null,
+    source_label: input.source_label ?? null,
   });
 
   if (error) return { ok: false, error: error.message };
