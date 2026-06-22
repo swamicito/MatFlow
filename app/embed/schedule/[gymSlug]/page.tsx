@@ -127,7 +127,7 @@ async function fetchEmbedData(gymSlug: string): Promise<{
   const classes: any[] = classRows ?? [];
 
   // 3. Fetch confirmed booking counts to compute spots remaining.
-  let countMap: Record<string, number> = {};
+  const countMap: Record<string, number> = {};
   if (classes.length > 0) {
     const classIds = classes.map((c) => c.id);
     const { data: bookings } = await admin
