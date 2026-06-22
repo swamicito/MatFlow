@@ -1,0 +1,12 @@
+/* TEAM */
+Product & Engineering: MatFlow Team
+Site: https://mat-flow.net
+
+/* THANKS */
+Built with Next.js, Supabase, Tailwind CSS, and Stripe.
+Hosted on Vercel.
+
+/* SITE */
+Last update: 2026
+Standards: HTML5, CSS3
+Components: React, TypeScript

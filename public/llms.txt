@@ -1,0 +1,47 @@
+# MatFlow
+
+MatFlow is a modern class scheduling and gym management platform built for Brazilian Jiu-Jitsu, MMA, Muay Thai, and fitness academies.
+
+It allows gym owners and coaches to manage class schedules, handle student sign-ups, track real-time capacity, and collect payments — all from a single web-based dashboard. A core feature is a public embeddable class schedule that any gym can drop onto their Webflow, Squarespace, or custom website with two lines of HTML.
+
+MatFlow replaces ad-hoc systems — Google Sheets, WhatsApp group chats, manual invoices — with a purpose-built platform designed for martial arts academies that want a professional student experience without the complexity of enterprise gym software.
+
+## Reference Pages
+
+- Homepage: https://mat-flow.net/
+  Main landing page. Explains the product value proposition with a video sales letter. Primary CTA is free trial sign-up via /login.
+
+- Login: https://mat-flow.net/login
+  Magic-link authentication entry point for gym owners, coaches, and students. No passwords — users receive a sign-in link by email.
+
+- Schedule Embed: https://mat-flow.net/embed/schedule/{gymSlug}
+  Public, read-only class schedule for a specific gym identified by its slug. Designed to be embedded inside an <iframe> on any external website. Auto-resizes via postMessage. No login required to view.
+
+- LLM Reference: https://mat-flow.net/llms.txt
+  This file. Machine-readable description of MatFlow for AI agents and LLM crawlers.
+
+## Key Features
+
+- Live embeddable class schedule (two-line iframe widget, auto-resizes, works on Webflow, Squarespace, Wix, WordPress, Carrd, and any HTML page)
+- Real-time capacity tracking — students see spots remaining; classes close automatically when full
+- Student self-service sign-ups via passwordless magic link (no account creation friction)
+- Coach and admin dashboard with roster, attendance tracking, and belt progress
+- Stripe-powered membership billing and drop-in payments with automatic recurring charges
+- Automated email and SMS reminders for class sign-ups, no-shows, and quiet students
+- Multi-gym support — one platform account can manage multiple gym locations
+- Rich class descriptions with photos, instructor bios, videos, and custom CTAs
+
+## Target Users
+
+- **Primary:** Gym owners and head coaches running Brazilian Jiu-Jitsu, MMA, Muay Thai, wrestling, or general fitness academies
+- **Secondary:** Small to mid-size martial arts schools (5–300 students) replacing manual systems like WhatsApp, Google Sheets, or Mindbody
+- **Use case:** Coaches who want a public-facing live schedule embedded on their own website without building custom software or paying for expensive enterprise platforms
+
+## Technical Notes
+
+- Built on Next.js 15 (App Router) with a Supabase (PostgreSQL) backend
+- Authentication: passwordless magic links via Supabase Auth OTP
+- Payments: Stripe integration for recurring memberships and one-off drop-ins
+- Schedule embed: standard <iframe> with postMessage-based auto-resize; Content-Security-Policy allows cross-origin framing
+- Data isolation: all gym data is fully isolated per tenant; no cross-gym data access is possible
+- Hosting: Vercel (edge-optimized, global CDN)

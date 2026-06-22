@@ -20,10 +20,76 @@ import { FaqAccordion } from "@/components/marketing/faq-accordion";
 // ─────────────────────────────────────────────────────────────────────────────
 const VSL_VIDEO_ID = "dQw4w9WgXcQ";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
+
 export const metadata: Metadata = {
-  title: "MatFlow — Gym Management Built for BJJ Academies",
+  title: "MatFlow — Gym Management for BJJ Academies",
   description:
-    "The all-in-one platform for martial arts academies. Live class scheduling, online sign-ups, Stripe payments, and a beautiful embeddable schedule for your website.",
+    "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule — in one platform.",
+  alternates: {
+    canonical: SITE_URL,
+  },
+  openGraph: {
+    url: SITE_URL,
+    title: "MatFlow — Gym Management for BJJ Academies",
+    description:
+      "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule — in one platform.",
+  },
+};
+
+// ── JSON-LD schema ───────────────────────────────────────────────────────────
+
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "MatFlow",
+      url: SITE_URL,
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/logo-full.png`,
+        width: 400,
+        height: 100,
+      },
+      description:
+        "MatFlow is the all-in-one gym management platform for BJJ and martial arts academies.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "MatFlow",
+      url: SITE_URL,
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_URL}/#software`,
+      name: "MatFlow",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: SITE_URL,
+      description:
+        "All-in-one gym management and class scheduling platform for martial arts academies. Features include embeddable class schedules, student self-service sign-ups, real-time capacity tracking, Stripe billing, and a coach dashboard.",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        description: "Free to start. Paid plans available.",
+      },
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      featureList: [
+        "Embeddable class schedule for any website",
+        "Real-time capacity and spot tracking",
+        "Student self-service sign-ups",
+        "Stripe membership billing",
+        "Coach and admin dashboard",
+        "Automated class reminders",
+        "Multi-gym support",
+      ],
+    },
+  ],
 };
 
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -108,6 +174,10 @@ const PAIN_POINTS = [
 export default function LandingPage() {
   return (
     <div className="bg-black text-white min-h-screen overflow-x-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <Navbar />
 
       {/* ── HERO ──────────────────────────────────────────────────────────── */}
