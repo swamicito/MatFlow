@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     siteName: "MatFlow",
     title: "MatFlow — Gym Management & Scheduling for BJJ Academies",
     description:
-      "Gym management built for BJJ academies. Class scheduling, student sign-ups, Stripe payments, and a live embeddable schedule for your website.",
+      "Beautiful embeddable schedules, student self check-ins, and clean Stripe billing for BJJ gyms.",
     images: [
       {
         url: "/api/og",
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MatFlow — Gym Management & Scheduling for BJJ Academies",
     description:
-      "Gym management built for BJJ academies. Class scheduling, student sign-ups, Stripe payments, and a live embeddable schedule for your website.",
+      "Beautiful embeddable schedules, student self check-ins, and clean Stripe billing for BJJ gyms.",
     images: ["/api/og"],
   },
   robots: {
