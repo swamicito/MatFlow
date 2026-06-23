@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s | MatFlow",
   },
   description:
-    "MatFlow is the all-in-one gym management platform for BJJ and martial arts academies. Class scheduling, student sign-ups, Stripe payments, and an embeddable live schedule for your website.",
+    "MatFlow is gym management built for BJJ academies. Class scheduling, student sign-ups, Stripe payments, and a live embeddable schedule — in one platform.",
   keywords: [
     "BJJ gym management",
     "jiu-jitsu class scheduling",
@@ -32,9 +32,8 @@ export const metadata: Metadata = {
   creator: "MatFlow",
   publisher: "MatFlow",
   icons: {
-    icon: "/logo-icon.png",
+    icon: "/icon.png",
     apple: "/logo-icon.png",
-    shortcut: "/logo-icon.png",
   },
   openGraph: {
     type: "website",
@@ -43,7 +42,7 @@ export const metadata: Metadata = {
     siteName: "MatFlow",
     title: "MatFlow — Gym Management & Scheduling for BJJ Academies",
     description:
-      "The all-in-one platform for martial arts academies. Class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule for your website.",
+      "Gym management built for BJJ academies. Class scheduling, student sign-ups, Stripe payments, and a live embeddable schedule for your website.",
     images: [
       {
         url: "/api/og",
@@ -57,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MatFlow — Gym Management & Scheduling for BJJ Academies",
     description:
-      "The all-in-one platform for martial arts academies. Class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule for your website.",
+      "Gym management built for BJJ academies. Class scheduling, student sign-ups, Stripe payments, and a live embeddable schedule for your website.",
     images: ["/api/og"],
   },
   robots: {

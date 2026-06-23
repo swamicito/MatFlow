@@ -25,15 +25,32 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
 export const metadata: Metadata = {
   title: "MatFlow — Gym Management for BJJ Academies",
   description:
-    "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule — in one platform.",
+    "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and an embeddable schedule.",
   alternates: {
     canonical: SITE_URL,
   },
   openGraph: {
+    type: "website",
     url: SITE_URL,
+    siteName: "MatFlow",
     title: "MatFlow — Gym Management for BJJ Academies",
     description:
-      "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and a beautiful embeddable schedule — in one platform.",
+      "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and an embeddable schedule.",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: "MatFlow — Gym Management Platform for BJJ Academies",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MatFlow — Gym Management for BJJ Academies",
+    description:
+      "Stop running your gym from DMs. MatFlow gives BJJ academies class scheduling, student sign-ups, Stripe payments, and an embeddable schedule.",
+    images: ["/api/og"],
   },
 };
 
