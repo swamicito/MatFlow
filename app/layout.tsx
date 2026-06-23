@@ -45,7 +45,7 @@ export const metadata: Metadata = {
       "Beautiful embeddable schedules, student self check-ins, and clean Stripe billing for BJJ gyms.",
     images: [
       {
-        url: "/api/og",
+        url: "/og-image.png",           // ← Changed to static image
         width: 1200,
         height: 630,
         alt: "MatFlow — Gym Management Platform for BJJ Academies",
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     title: "MatFlow — Gym Management & Scheduling for BJJ Academies",
     description:
       "Beautiful embeddable schedules, student self check-ins, and clean Stripe billing for BJJ gyms.",
-    images: ["/api/og"],
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
