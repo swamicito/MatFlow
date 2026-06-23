@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const runtime = "nodejs";
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const logoData = await readFile(
@@ -198,9 +199,6 @@ export async function GET() {
     {
       width: 1200,
       height: 630,
-      headers: {
-        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-      },
     },
   );
 }
