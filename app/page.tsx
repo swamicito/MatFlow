@@ -14,11 +14,7 @@ import {
 import { Navbar } from "@/components/marketing/navbar";
 import { FaqAccordion } from "@/components/marketing/faq-accordion";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TODO: Replace this with your real VSL YouTube video ID before going live.
-// Example: "dQw4w9WgXcQ"  →  https://www.youtube.com/watch?v=dQw4w9WgXcQ
-// ─────────────────────────────────────────────────────────────────────────────
-const VSL_VIDEO_ID = "dQw4w9WgXcQ";
+const VSL_VIDEO_ID = "QXkh0B7xnhk";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
 
@@ -250,11 +246,7 @@ export default function LandingPage() {
 
           {/* Trust bar */}
           <p className="text-xs text-[#444] pt-2">
-            Trusted by coaches at{" "}
-            <span className="text-[#5a5a5a] font-medium">Method Jiu-Jitsu</span>
-            ,{" "}
-            <span className="text-[#5a5a5a] font-medium">Silva Fusion</span>,
-            and growing academies worldwide.
+            Trusted by coaches at growing BJJ academies worldwide.
           </p>
         </div>
       </section>
@@ -275,7 +267,6 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* TODO: Replace VSL_VIDEO_ID at the top of this file with your real YouTube video ID */}
           <div className="relative rounded-2xl overflow-hidden border border-[#1f1f1f] shadow-2xl shadow-black/80 bg-[#0a0a0a]">
             <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
               <iframe
