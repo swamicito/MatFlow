@@ -210,7 +210,7 @@ export default async function SettingsPage() {
           </div>
 
           <p className="text-xs text-[#444]">
-            +$79/month per additional gym &bull; One-time setup $349
+            +$79/month per additional gym &bull; One-time setup $399
           </p>
         </section>
       )}

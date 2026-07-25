@@ -2,21 +2,17 @@
 import { LeadsTable } from "@/components/leads/leads-table";
 import { NewLeadDialog } from "@/components/leads/new-lead-dialog";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage() {
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
 
   const [leadsRes, familiesRes] = await Promise.all([
-    gymId
-      ? supabase.from("leads").select("*").eq("gym_id", gymId).order("created_at", { ascending: false })
-      : supabase.from("leads").select("*").order("created_at", { ascending: false }),
-    gymId
-      ? supabase.from("family_accounts").select("*").eq("gym_id", gymId).order("parent_name", { ascending: true })
-      : supabase.from("family_accounts").select("*").order("parent_name", { ascending: true }),
+    supabase.from("leads").select("*").eq("gym_id", gymId).order("created_at", { ascending: false }),
+    supabase.from("family_accounts").select("*").eq("gym_id", gymId).order("parent_name", { ascending: true }),
   ]);
 
   const error = leadsRes.error ?? familiesRes.error;

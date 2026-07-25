@@ -38,7 +38,7 @@ function detectTimezone(): string {
   }
 }
 
-type SuccessData = { id: string; name: string; slug: string; plansSeeded: number };
+type SuccessData = { id: string; name: string; slug: string; plansSeeded: number; challengesSeeded: number };
 type SlugStatus = "idle" | "checking" | "available" | "taken";
 
 const inputCls =
@@ -169,7 +169,9 @@ export default function NewGymPage() {
             <h1 className="text-3xl font-bold text-white tracking-tight">{success.name}</h1>
             <p className="text-[#9CA3AF] text-sm mt-1.5">
               Ready to go ·{" "}
-              <span className="text-emerald-400">{success.plansSeeded} membership plans seeded</span>
+              <span className="text-emerald-400">{success.plansSeeded} plans</span>
+              {" · "}
+              <span className="text-emerald-400">{success.challengesSeeded} passport challenges seeded</span>
             </p>
           </div>
         </div>

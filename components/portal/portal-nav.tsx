@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, FileSignature, MessageSquare, CreditCard } from "lucide-react";
+import { Home, CalendarDays, MessageSquare, CreditCard, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/portal", label: "Home", icon: Home },
   { href: "/portal/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/portal/waivers", label: "Waivers", icon: FileSignature },
+  { href: "/portal/passport", label: "Passport", icon: Shield },
   { href: "/portal/messages", label: "Messages", icon: MessageSquare },
   { href: "/portal/membership", label: "Billing", icon: CreditCard },
 ];

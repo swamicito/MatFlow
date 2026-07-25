@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 
 const GYM_COOKIE = "mf-gym-id";
 
@@ -37,17 +38,43 @@ export { GYM_COOKIE };
  * ──────────────────────────────────────────────────────────────────────────
  */
 export async function getCurrentGymId(): Promise<string | null> {
-  // ── 1. Explicit cookie (set by /api/gym after the user selects a gym) ──
   const store = await cookies();
   const fromCookie = store.get(GYM_COOKIE)?.value;
-  if (fromCookie && isUuid(fromCookie)) return fromCookie;
+
+  // ── 1. Cookie path — verify the user is actually a member of this gym ──
+  if (fromCookie && isUuid(fromCookie)) {
+    // Platform admins bypass membership check — they have god-mode access
+    // and use a separate mf-pa cookie with no Supabase session.
+    if (await isPlatformAdmin()) {
+      return fromCookie;
+    }
+
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const admin = createAdminClient() as any;
+        const { data } = await admin
+          .from("user_gyms")
+          .select("gym_id")
+          .eq("user_id", user.id)
+          .eq("gym_id", fromCookie)
+          .maybeSingle();
+
+        if (data?.gym_id) {
+          return fromCookie; // Confirmed: user is a member of this gym
+        }
+        // Cookie points to a gym the user does not belong to — fall through to session path
+      }
+    } catch {
+      // Fall through on any error
+    }
+  }
 
   // ── 2. Supabase auth session → user_gyms membership ──
-  //
-  // If the caller has a real Supabase session we can derive their gym from
-  // the user_gyms join table.  This path is a no-op today (staff auth is not
-  // yet wired) but it will become the primary path once it is, and having it
-  // here means getCurrentGymId() will "just work" the moment auth lands.
   try {
     const supabase = await createClient();
     const {
@@ -67,17 +94,10 @@ export async function getCurrentGymId(): Promise<string | null> {
       if (data?.gym_id && isUuid(data.gym_id as string)) {
         return data.gym_id as string;
       }
-
-      // User is authenticated but has no gym_id entry → do NOT fall through
-      // to a global lookup.  Return null so the caller can redirect to setup.
       return null;
     }
-  } catch {
-    // Auth lookup failures (e.g. no Supabase env configured in test) should
-    // not hard-crash; just fall through to null.
-  }
+  } catch {}
 
-  // ── No cookie, no session — cannot safely determine a gym ──
   return null;
 }
 
@@ -133,37 +153,25 @@ export async function listUserGyms(): Promise<GymContext[]> {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (user) {
-      const admin = createAdminClient() as any;
-      const { data } = await admin
-        .from("user_gyms")
-        .select("gyms(id, name, slug)")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-
-      return (data ?? [])
-        .map((row: any) => row.gyms)
-        .filter(Boolean)
-        .map((g: any) => ({ id: g.id as string, name: g.name as string, slug: g.slug as string }));
+    if (!user) {
+      return []; // No authenticated user → return empty list. UI handles this gracefully.
     }
-  } catch {
-    // Fall through to empty list on any auth error.
-  }
 
-  // No session (pre-auth / demo mode) — fall back to all gyms in the DB so
-  // the SelectGymState screen works before real auth is wired.  Once
-  // Supabase session auth is live this branch becomes unreachable.
-  try {
     const admin = createAdminClient() as any;
     const { data } = await admin
-      .from("gyms")
-      .select("id, name, slug")
+      .from("user_gyms")
+      .select("gyms(id, name, slug)")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: true });
-    return (data ?? []).map((g: any) => ({
-      id: g.id as string,
-      name: g.name as string,
-      slug: g.slug as string,
-    }));
+
+    return (data ?? [])
+      .map((row: any) => row.gyms)
+      .filter(Boolean)
+      .map((g: any) => ({
+        id: g.id as string,
+        name: g.name as string,
+        slug: g.slug as string,
+      }));
   } catch {
     return [];
   }

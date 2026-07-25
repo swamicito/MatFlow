@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 import {
   atRiskStudents,
   avgAttendance,
@@ -38,37 +38,32 @@ export default async function ReportsPage({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
 
-  const studentIds = gymId
-    ? ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id) // eslint-disable-line @typescript-eslint/no-explicit-any
-    : null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const studentIds: string[] =
+    ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id);
 
   // Fetch in parallel. We deliberately pull more than the window for some
   // calculations (e.g. retention requires students who joined before the
   // window started).
   let attendanceQuery = supabase
     .from("attendance")
-    .select("student_id, checked_in_at");
+    .select("student_id, checked_in_at")
+    .in("student_id", studentIds);
   if (days !== null) {
     attendanceQuery = attendanceQuery.gte("checked_in_at", isoDaysBefore(days)) as typeof attendanceQuery;
   }
-  if (studentIds) {
-    attendanceQuery = attendanceQuery.in("student_id", studentIds) as typeof attendanceQuery;
-  }
 
-  let leadsQuery = supabase.from("leads").select("source, status, created_at");
+  let leadsQuery = supabase.from("leads").select("source, status, created_at").eq("gym_id", gymId);
   if (days !== null) {
     leadsQuery = leadsQuery.gte("created_at", isoDaysBefore(days)) as typeof leadsQuery;
   }
-  if (gymId) {
-    leadsQuery = leadsQuery.eq("gym_id", gymId) as typeof leadsQuery;
-  }
 
-  let allAttQuery = supabase.from("attendance").select("student_id, checked_in_at");
-  if (studentIds) {
-    allAttQuery = allAttQuery.in("student_id", studentIds) as typeof allAttQuery;
-  }
+  const allAttQuery = supabase
+    .from("attendance")
+    .select("student_id, checked_in_at")
+    .in("student_id", studentIds);
 
   const [
     studentsRes,
@@ -79,19 +74,11 @@ export default async function ReportsPage({
     leadsRes,
     allAttendanceRes,
   ] = await Promise.all([
-    gymId
-      ? supabase.from("students").select("id, full_name, belt_rank, status, join_date").eq("gym_id", gymId)
-      : supabase.from("students").select("id, full_name, belt_rank, status, join_date"),
-    studentIds
-      ? supabase.from("belt_progress").select("student_id, current_belt, stripes").in("student_id", studentIds)
-      : supabase.from("belt_progress").select("student_id, current_belt, stripes"),
+    supabase.from("students").select("id, full_name, belt_rank, status, join_date").eq("gym_id", gymId),
+    supabase.from("belt_progress").select("student_id, current_belt, stripes").in("student_id", studentIds),
     attendanceQuery,
-    studentIds
-      ? supabase.from("memberships").select("id, student_id, plan_id, status, custom_price_cents").in("student_id", studentIds)
-      : supabase.from("memberships").select("id, student_id, plan_id, status, custom_price_cents"),
-    gymId
-      ? supabase.from("membership_plans").select("id, name, price_cents, interval").eq("gym_id", gymId)
-      : supabase.from("membership_plans").select("id, name, price_cents, interval"),
+    supabase.from("memberships").select("id, student_id, plan_id, status, custom_price_cents").in("student_id", studentIds),
+    supabase.from("membership_plans").select("id, name, price_cents, interval").eq("gym_id", gymId),
     leadsQuery,
     allAttQuery,
   ]);

@@ -1,12 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
 /**
- * Refreshes the Supabase auth session on each request. Wire this up from
- * `middleware.ts` at the project root once auth is enabled.
+ * Refreshes the Supabase auth session on each request and returns both the
+ * updated response and the authenticated user (or null).
+ *
+ * The root `middleware.ts` uses the returned `user` to gate staff routes
+ * without a second `getUser()` round-trip.
  */
-export async function updateSession(request: NextRequest) {
+export async function updateSession(
+  request: NextRequest,
+): Promise<{ response: NextResponse; user: User | null }> {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -30,6 +36,6 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
-  return response;
+  const { data: { user } } = await supabase.auth.getUser();
+  return { response, user };
 }

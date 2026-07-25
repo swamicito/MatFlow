@@ -20,6 +20,10 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Preserve the ?next= param so the auth callback can redirect back
+  // to the page the user was trying to reach before being sent to login.
+  const next = searchParams.get("next") ?? "";
+
   useEffect(() => {
     const key = searchParams.get("error");
     if (key) setError(ERROR_MESSAGES[key] ?? `Sign-in error: ${key}`);
@@ -33,9 +37,11 @@ function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
+    const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+    if (next) callbackUrl.searchParams.set("next", next);
     const { error: authErr } = await supabase.auth.signInWithOtp({
       email: trimmed,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: callbackUrl.toString() },
     });
 
     if (authErr) {
@@ -59,7 +65,7 @@ function LoginForm() {
             <p className="text-[#9CA3AF] text-sm mt-2 leading-relaxed">
               We sent a sign-in link to{" "}
               <span className="text-white font-medium">{email}</span>.
-              Click it to access the student portal.
+              Click it to sign in to MatFlow.
             </p>
           </div>
           <button

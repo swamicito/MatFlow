@@ -24,6 +24,7 @@ export type CreateGymInput = {
   slug: string;
   address: string | null;
   timezone: string;
+  owner_user_id?: string; // optional — only passed during self-serve onboarding
 };
 
 type ActionResult<T = undefined> =
@@ -87,9 +88,33 @@ const STARTER_PLANS = [
   },
 ] as const;
 
+const STARTER_PASSPORT_CHALLENGES = [
+  {
+    title:          "First Month Push",
+    description:    "Attend 8 classes in your first 30 days.",
+    challenge_type: "class_count" as const,
+    goal_value:     8,
+    points_reward:  100,
+  },
+  {
+    title:          "Build the Habit",
+    description:    "Maintain a 7-day check-in streak.",
+    challenge_type: "streak" as const,
+    goal_value:     7,
+    points_reward:  75,
+  },
+  {
+    title:          "Points Grind",
+    description:    "Earn 100 points within 30 days.",
+    challenge_type: "points_earned" as const,
+    goal_value:     100,
+    points_reward:  50,
+  },
+] as const;
+
 export async function createGymWithSeed(
   input: CreateGymInput,
-): Promise<ActionResult<{ id: string; name: string; slug: string; plansSeeded: number }>> {
+): Promise<ActionResult<{ id: string; name: string; slug: string; plansSeeded: number; challengesSeeded: number }>> {
   if (!(await isPlatformAdmin())) {
     return { ok: false, error: "Platform admin access required." };
   }
@@ -134,6 +159,19 @@ export async function createGymWithSeed(
 
   const gymId = gym.id as string;
 
+  // Link the creating user as owner in user_gyms (non-fatal)
+  if (input.owner_user_id) {
+    await supabase
+      .from("user_gyms")
+      .insert({
+        gym_id: gymId,
+        user_id: input.owner_user_id,
+        role: "owner",
+      })
+      .then(() => void 0) // intentionally non-fatal
+      .catch(() => void 0);
+  }
+
   // Seed starter membership plans (non-fatal if it fails)
   const { error: plansErr } = await supabase
     .from("membership_plans")
@@ -141,8 +179,28 @@ export async function createGymWithSeed(
 
   const plansSeeded = plansErr ? 0 : STARTER_PLANS.length;
 
+  // Seed starter Passport Challenges (non-fatal — gym creation already succeeded)
+  let challengesSeeded = 0;
+  try {
+    const startDate = new Date().toISOString().split("T")[0];
+    const endTs = new Date();
+    endTs.setUTCDate(endTs.getUTCDate() + 30);
+    const endDate = endTs.toISOString().split("T")[0];
+
+    const { error: challengesErr } = await supabase.from("passport_challenges").insert(
+      STARTER_PASSPORT_CHALLENGES.map((c) => ({
+        ...c,
+        gym_id:     gymId,
+        start_date: startDate,
+        end_date:   endDate,
+        is_active:  true,
+      })),
+    );
+    if (!challengesErr) challengesSeeded = STARTER_PASSPORT_CHALLENGES.length;
+  } catch { /* non-fatal */ }
+
   revalidatePath("/admin/gyms");
-  return { ok: true, data: { id: gymId, name, slug, plansSeeded } };
+  return { ok: true, data: { id: gymId, name, slug, plansSeeded, challengesSeeded } };
 }
 
 // ── Slug availability check ───────────────────────────────────────────────────

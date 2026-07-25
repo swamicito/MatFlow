@@ -102,6 +102,13 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
+  // ── Second-door auth gate ───────────────────────────────────────────────────
+  // Primary gate is in middleware.ts. This is defense-in-depth in case
+  // middleware is bypassed (e.g. misconfigured matcher or edge runtime quirk).
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   // Resolve all context in one parallel fetch.
   // getCurrentGymId() is called exactly once — the result is shared with
   // isOnboardingComplete() and Topbar, eliminating the previous double-call.

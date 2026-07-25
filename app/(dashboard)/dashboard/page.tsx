@@ -8,7 +8,7 @@ import { isRevenueStatus, toMonthlyCents, formatMoney } from "@/lib/billing";
 import { getDemoStatus } from "@/app/(dashboard)/dashboard/demo-actions";
 import { TODAYS_CLASSES } from "@/lib/checkin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 
 export const dynamic = "force-dynamic";
 
@@ -19,40 +19,26 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayLabel = `${DOW[now.getDay()]}, ${MON[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
+
+  // Pre-fetch student IDs scoped to this gym (used for in() queries below).
+  const gymStudentIds: string[] =
+    ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id);
 
   const [studentsRes, leadsRes, membershipsRes, plansRes, demo, recentCheckinsRes, recentLeadsRes] =
     await Promise.all([
-      gymId
-        ? supabase.from("students").select("id, status", { count: "exact" }).eq("gym_id", gymId)
-        : supabase.from("students").select("id, status", { count: "exact" }),
-      gymId
-        ? supabase.from("leads").select("id, status", { count: "exact" }).eq("gym_id", gymId)
-        : supabase.from("leads").select("id, status", { count: "exact" }),
-      gymId
-        ? supabase.from("memberships").select("status, custom_price_cents, plan_id").in("student_id",
-            (await supabase.from("students").select("id").eq("gym_id", gymId)).data?.map((s: any) => s.id) ?? [])
-        : supabase.from("memberships").select("status, custom_price_cents, plan_id"),
-      gymId
-        ? supabase.from("membership_plans").select("id, price_cents, interval").eq("gym_id", gymId)
-        : supabase.from("membership_plans").select("id, price_cents, interval"),
+      supabase.from("students").select("id, status", { count: "exact" }).eq("gym_id", gymId),
+      supabase.from("leads").select("id, status", { count: "exact" }).eq("gym_id", gymId),
+      supabase.from("memberships").select("status, custom_price_cents, plan_id").in("student_id", gymStudentIds),
+      supabase.from("membership_plans").select("id, price_cents, interval").eq("gym_id", gymId),
       getDemoStatus(),
-      gymId
-        ? supabase
-            .from("attendance")
-            .select("id, student_id, class_type, checked_in_at, students(full_name)")
-            .in("student_id",
-              (await supabase.from("students").select("id").eq("gym_id", gymId)).data?.map((s: any) => s.id) ?? [])
-            .order("checked_in_at", { ascending: false })
-            .limit(6)
-        : supabase
-            .from("attendance")
-            .select("id, student_id, class_type, checked_in_at, students(full_name)")
-            .order("checked_in_at", { ascending: false })
-            .limit(6),
-      gymId
-        ? supabase.from("leads").select("id, name, source, created_at").eq("gym_id", gymId).order("created_at", { ascending: false }).limit(4)
-        : supabase.from("leads").select("id, name, source, created_at").order("created_at", { ascending: false }).limit(4),
+      supabase
+        .from("attendance")
+        .select("id, student_id, class_type, checked_in_at, students(full_name)")
+        .in("student_id", gymStudentIds)
+        .order("checked_in_at", { ascending: false })
+        .limit(6),
+      supabase.from("leads").select("id, name, source, created_at").eq("gym_id", gymId).order("created_at", { ascending: false }).limit(4),
     ]);
 
   const totalStudents = studentsRes.count ?? 0;

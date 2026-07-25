@@ -1,38 +1,58 @@
-import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { can, type Permission } from "@/lib/permissions";
 import type { UserRole } from "@/lib/supabase/types";
 
-const ROLE_COOKIE = "mf-role";
 const VALID_ROLES: UserRole[] = ["owner", "admin", "instructor", "front_desk"];
+
+// Kept for the role-switcher UI in the topbar (display-only, not trusted for auth).
+export const ROLE_COOKIE = "mf-role";
 
 /**
  * Returns the active role for the current request.
  *
- * MatFlow is currently single-tenant and ships without an auth provider, so
- * the role is selected from a signed-out role switcher in the topbar and
- * stored in the `mf-role` cookie. When real Supabase auth is wired in, swap
- * this implementation for `auth.getUser()` → `profiles.role`.
+ * Derives the role from `user_gyms.role` — scoped to both the authenticated
+ * Supabase user AND the verified current gym. Cookie is no longer trusted.
+ * Fails closed to "front_desk" (lowest privilege) if anything goes wrong.
  */
 export async function getCurrentRole(): Promise<UserRole> {
-  const store = await cookies();
-  const raw = store.get(ROLE_COOKIE)?.value;
-  if (raw && (VALID_ROLES as string[]).includes(raw)) {
-    return raw as UserRole;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return "front_desk";
+
+    const gymId = await getCurrentGymId();
+    if (!gymId) return "front_desk";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("user_gyms")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("gym_id", gymId)
+      .maybeSingle();
+
+    const raw = data?.role as string | undefined;
+    if (raw && (VALID_ROLES as string[]).includes(raw)) return raw as UserRole;
+  } catch {
+    // Fall through to safe default on any error.
   }
-  return "owner";
+
+  return "front_desk"; // fail-closed — never silently escalate to "owner"
 }
 
 export function isValidRole(value: string): value is UserRole {
   return (VALID_ROLES as string[]).includes(value);
 }
 
-export { ROLE_COOKIE };
-
 /**
  * Server-action helper. Returns `{ ok: false }` with a friendly message when
  * the caller lacks the required permission so actions can early-return.
  */
-import { can, type Permission } from "@/lib/permissions";
-
 export async function requirePermission(
   perm: Permission,
 ): Promise<{ ok: true; role: UserRole } | { ok: false; error: string }> {

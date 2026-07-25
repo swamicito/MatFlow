@@ -41,6 +41,12 @@ export function Navbar() {
               </a>
             ),
           )}
+          <Link
+            href="/pricing"
+            className="text-sm text-[#9CA3AF] hover:text-white transition-colors"
+          >
+            Pricing
+          </Link>
         </nav>
 
         {/* Desktop right side */}
@@ -86,6 +92,13 @@ export function Navbar() {
                 </a>
               ),
             )}
+            <Link
+              href="/pricing"
+              onClick={() => setOpen(false)}
+              className="text-sm text-[#9CA3AF] hover:text-white transition-colors"
+            >
+              Pricing
+            </Link>
           </nav>
           <div className="flex flex-col gap-2 pt-5 mt-5 border-t border-[#111]">
             <Link

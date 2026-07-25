@@ -6,34 +6,24 @@ import {
 import { isRevenueStatus, toMonthlyCents } from "@/lib/billing";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 import type { MembershipInterval } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
 
-  const { data: studentRows } = gymId
-    ? await supabase.from("students").select("id").eq("gym_id", gymId)
-    : { data: null };
-  const studentIds: string[] | null = studentRows ? studentRows.map((s: any) => s.id) : null;
+  const studentIds: string[] =
+    ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id);
 
   const [membershipsRes, plansRes, studentsRes, plansCountRes] =
     await Promise.all([
-      studentIds
-        ? supabase.from("memberships").select("*").in("student_id", studentIds).order("created_at", { ascending: false })
-        : supabase.from("memberships").select("*").order("created_at", { ascending: false }),
-      gymId
-        ? supabase.from("membership_plans").select("*").eq("gym_id", gymId)
-        : supabase.from("membership_plans").select("*"),
-      gymId
-        ? supabase.from("students").select("id, full_name").eq("gym_id", gymId)
-        : supabase.from("students").select("id, full_name"),
-      gymId
-        ? supabase.from("membership_plans").select("id", { count: "exact", head: true }).eq("gym_id", gymId)
-        : supabase.from("membership_plans").select("id", { count: "exact", head: true }),
+      supabase.from("memberships").select("*").in("student_id", studentIds).order("created_at", { ascending: false }),
+      supabase.from("membership_plans").select("*").eq("gym_id", gymId),
+      supabase.from("students").select("id, full_name").eq("gym_id", gymId),
+      supabase.from("membership_plans").select("id", { count: "exact", head: true }).eq("gym_id", gymId),
     ]);
 
   const error =

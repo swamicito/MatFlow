@@ -2,7 +2,7 @@
 import { StudentsPageClient } from "@/components/students/students-page-client";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 import type { Database } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -13,32 +13,19 @@ type Waiver = Database["public"]["Tables"]["waivers"]["Row"];
 
 export default async function StudentsPage() {
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
 
-  const studentIds = gymId
-    ? ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id)
-    : null;
+  const studentIds: string[] =
+    ((await supabase.from("students").select("id").eq("gym_id", gymId)).data ?? []).map((s: any) => s.id);
 
   const [studentsRes, progressRes, membershipsRes, plansRes, familiesRes, waiversRes] =
     await Promise.all([
-      gymId
-        ? supabase.from("students").select("*").eq("gym_id", gymId).order("created_at", { ascending: false })
-        : supabase.from("students").select("*").order("created_at", { ascending: false }),
-      studentIds
-        ? supabase.from("belt_progress").select("*").in("student_id", studentIds)
-        : supabase.from("belt_progress").select("*"),
-      studentIds
-        ? supabase.from("memberships").select("*").in("student_id", studentIds).in("status", ["active", "trialing", "past_due", "paused"])
-        : supabase.from("memberships").select("*").in("status", ["active", "trialing", "past_due", "paused"]),
-      gymId
-        ? supabase.from("membership_plans").select("*").eq("gym_id", gymId).order("price_cents", { ascending: true })
-        : supabase.from("membership_plans").select("*").order("price_cents", { ascending: true }),
-      gymId
-        ? supabase.from("family_accounts").select("*").eq("gym_id", gymId).order("parent_name", { ascending: true })
-        : supabase.from("family_accounts").select("*").order("parent_name", { ascending: true }),
-      studentIds
-        ? supabase.from("waivers").select("*").in("student_id", studentIds).order("signed_at", { ascending: false })
-        : supabase.from("waivers").select("*").order("signed_at", { ascending: false }),
+      supabase.from("students").select("*").eq("gym_id", gymId).order("created_at", { ascending: false }),
+      supabase.from("belt_progress").select("*").in("student_id", studentIds),
+      supabase.from("memberships").select("*").in("student_id", studentIds).in("status", ["active", "trialing", "past_due", "paused"]),
+      supabase.from("membership_plans").select("*").eq("gym_id", gymId).order("price_cents", { ascending: true }),
+      supabase.from("family_accounts").select("*").eq("gym_id", gymId).order("parent_name", { ascending: true }),
+      supabase.from("waivers").select("*").in("student_id", studentIds).order("signed_at", { ascending: false }),
     ]);
 
   const error =

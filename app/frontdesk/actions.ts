@@ -6,6 +6,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
 import { CLASS_TYPES, DEFAULT_CLASS, type ClassType } from "@/lib/checkin";
 import { deductClassCredit } from "@/app/(dashboard)/settings/sell/actions";
+import { updateStreakOnCheckin, awardPoints } from "@/lib/gamification/passport";
+import { checkAndAwardBadges } from "@/lib/gamification/badges";
+import { updateClassCountProgress, evaluateAndCompleteChallenges } from "@/lib/gamification/challenges";
+import { PointReason } from "@/lib/gamification/types";
 import type { UtmParams } from "@/lib/utm";
 
 export type ActionResult<T = undefined> =
@@ -76,6 +80,32 @@ export async function checkInStudent(
   }
 
   await deductClassCredit(student.id).catch(() => {/* safe to ignore */});
+
+  // ── Gamification: streak → points → badge check ───────────────────────────
+  // Look up the student's auth user ID (only present if they have a portal
+  // account). Wrapped in try/catch so any gamification failure is non-breaking
+  // — the check-in record is already committed at this point.
+  try {
+    const { data: authMapping } = await supabase
+      .from("student_auth")
+      .select("auth_user_id")
+      .eq("student_id", student.id)
+      .maybeSingle();
+
+    if (authMapping?.auth_user_id) {
+      const uid = authMapping.auth_user_id as string;
+      await updateStreakOnCheckin(uid, gymId);
+      await awardPoints(uid, gymId, 25, PointReason.CLASS_CHECKIN);
+      await checkAndAwardBadges(uid, gymId);
+      // Challenge progress: increment class_count counters, then evaluate all
+      // types (streak + points_earned are derived from passport at eval time).
+      await updateClassCountProgress(uid, gymId);
+      await evaluateAndCompleteChallenges(uid, gymId);
+    }
+  } catch {
+    // Gamification errors are non-fatal — check-in already succeeded.
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   revalidatePath("/frontdesk");
   return {

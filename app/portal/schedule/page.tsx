@@ -18,13 +18,7 @@ export default async function PortalSchedulePage() {
     );
   }
 
-  const { data: student } = await admin
-    .from("students")
-    .select("gym_id")
-    .eq("id", identity.studentId)
-    .maybeSingle();
-
-  const gymId: string | null = student?.gym_id ?? null;
+  const gymId = identity.gymId;
 
   let gymName = "Your Gym";
   if (gymId) {

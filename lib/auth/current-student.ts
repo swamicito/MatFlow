@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export type StudentIdentity = {
   authUserId: string;
   studentId: string;
+  gymId: string | null;
 };
 
 /**
@@ -25,12 +26,16 @@ export async function getCurrentStudentIdentity(): Promise<StudentIdentity | nul
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("student_auth")
-    .select("student_id")
+    .select("student_id, students(gym_id)")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
   if (!data?.student_id) return null;
-  return { authUserId: user.id, studentId: data.student_id };
+  return {
+    authUserId: user.id,
+    studentId:  data.student_id as string,
+    gymId:      (data.students as any)?.gym_id ?? null,
+  };
 }
 
 /**
