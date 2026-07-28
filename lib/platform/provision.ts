@@ -1,0 +1,311 @@
+/**
+ * lib/platform/provision.ts
+ *
+ * Fully-automated provisioning for new MatFlow gym signups.
+ * Called from the Stripe webhook after checkout.session.completed fires
+ * for a platform_subscription purchase. Never called from browser code.
+ *
+ * Steps
+ *  1. Get-or-create the Supabase auth user for the gym owner.
+ *  2. Idempotency check — if the user already owns a gym, re-send the
+ *     welcome email and return early (safe for webhook retries).
+ *  3. Create the gym (onboarding_completed: false → wizard on first login).
+ *  4. Link user as owner in user_gyms + profiles.
+ *  5. Seed starter membership plans.
+ *  6. Generate a Supabase magic link and send branded welcome email.
+ *  7. Send admin notification.
+ */
+
+import "server-only";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/messaging";
+
+const SITE_URL    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
+const ADMIN_EMAIL = process.env.MATFLOW_ADMIN_EMAIL  ?? "support@mat-flow.net";
+
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+export type ProvisionInput = {
+  gymName:              string;
+  ownerName:            string;
+  ownerEmail:           string;
+  stripeSessionId:      string;
+  stripePlan:           string;
+  stripeInterval:       string;
+  stripeCustomerId:     string | null;
+  stripeSubscriptionId: string | null;
+};
+
+export type ProvisionResult =
+  | { ok: true;  gymId: string; userId: string; alreadyProvisioned: boolean }
+  | { ok: false; error: string };
+
+// ─── Seed data ────────────────────────────────────────────────────────────────
+
+const STARTER_PLANS = [
+  { name: "Monthly Unlimited", price_cents: 15000, interval: "month" as const, description: "Unlimited classes every month." },
+  { name: "3× Per Week",       price_cents: 10000, interval: "month" as const, description: "Up to 12 classes per month." },
+  { name: "Kids Program",      price_cents: 10000, interval: "month" as const, description: "Youth classes for ages 4–14." },
+  { name: "Foundations",       price_cents: 12000, interval: "month" as const, description: "Fundamentals track for brand-new students." },
+  { name: "Drop-In Pass",      price_cents:  3000, interval: "week"  as const, description: "Single-week drop-in access." },
+] as const;
+
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+function slugify(name: string): string {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function findUniqueSlug(supabase: any, gymName: string): Promise<string> {
+  const base = slugify(gymName) || "gym";
+  let slug    = base;
+  for (let i = 2; i < 200; i++) {
+    const { data } = await supabase.from("gyms").select("id").eq("slug", slug).maybeSingle();
+    if (!data) break;
+    slug = `${base}-${i}`;
+  }
+  return slug;
+}
+
+async function getOrCreateAuthUser(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  email: string,
+  fullName: string,
+): Promise<{ userId: string; created: boolean }> {
+  const { data: newUser, error } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+  });
+
+  if (!error && newUser?.user?.id) {
+    return { userId: newUser.user.id as string, created: true };
+  }
+
+  // User already exists — find by scanning the list (safe at low volume).
+  const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existing = (list?.users ?? []).find((u: any) =>
+    (u.email ?? "").toLowerCase() === email.toLowerCase(),
+  );
+  if (existing?.id) return { userId: existing.id as string, created: false };
+
+  throw new Error(
+    `Could not create or find auth user for ${email}: ${error?.message ?? "unknown error"}`,
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function generateMagicLink(supabase: any, email: string): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.admin.generateLink({
+      type:    "magiclink",
+      email,
+      options: { redirectTo: `${SITE_URL}/auth/callback?next=/dashboard` },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data as any)?.properties?.action_link ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Email templates ──────────────────────────────────────────────────────────
+
+function welcomeHtml(input: ProvisionInput, magicLink: string): string {
+  const firstName = input.ownerName.split(" ")[0];
+  const steps = [
+    "Walk through a 2-minute setup wizard to confirm your gym details and timezone.",
+    "Copy your one-line embed code and add your schedule to your website.",
+    "Import your existing students with our CSV import tool.",
+    "Start collecting memberships and running your gym from one place.",
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your MatFlow workspace is ready</title></head>
+<body style="margin:0;padding:0;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#000;padding:48px 20px;">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#0d0d0d;border:1px solid #1f1f1f;border-radius:16px;overflow:hidden;max-width:520px;width:100%;">
+
+  <tr><td style="padding:28px 36px 24px;border-bottom:1px solid #1a1a1a;">
+    <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#555;">MatFlow</p>
+  </td></tr>
+
+  <tr><td style="padding:32px 36px 28px;">
+    <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;line-height:1.3;color:#fff;">
+      Your workspace is ready, ${firstName}!
+    </h1>
+    <p style="margin:0 0 28px;font-size:14px;line-height:1.65;color:#9CA3AF;">
+      <strong style="color:#fff;">${input.gymName}</strong> is live on MatFlow.
+      Click the button below to log&nbsp;in — no password needed.
+    </p>
+
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+      <tr><td style="background:#fff;border-radius:10px;">
+        <a href="${magicLink}"
+           style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#000;text-decoration:none;white-space:nowrap;">
+          Log in to MatFlow →
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#4B5563;">
+      What happens next
+    </p>
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 28px;">
+      ${steps.map((step, i) => `
+      <tr>
+        <td width="26" valign="top" style="padding:3px 10px 8px 0;">
+          <span style="display:inline-block;width:20px;height:20px;background:#052e16;border:1px solid #14532d;border-radius:50%;font-size:10px;font-weight:700;color:#4ade80;text-align:center;line-height:20px;">${i + 1}</span>
+        </td>
+        <td style="padding:3px 0 8px;font-size:13px;line-height:1.55;color:#9CA3AF;">${step}</td>
+      </tr>`).join("")}
+    </table>
+
+    <p style="margin:0;font-size:12px;color:#555;line-height:1.5;">
+      This link expires in 24&nbsp;hours. After that,
+      <a href="${SITE_URL}/login" style="color:#4ade80;text-decoration:none;">request a new one here</a>.
+    </p>
+  </td></tr>
+
+  <tr><td style="padding:18px 36px;border-top:1px solid #1a1a1a;">
+    <p style="margin:0;font-size:11px;color:#555;">
+      Questions? Reply to this email or write to
+      <a href="mailto:${ADMIN_EMAIL}" style="color:#4ade80;text-decoration:none;">${ADMIN_EMAIL}</a>
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+async function sendWelcomeEmail(input: ProvisionInput, magicLink: string): Promise<void> {
+  const firstName = input.ownerName.split(" ")[0];
+  await sendEmail({
+    to:      input.ownerEmail,
+    subject: `Your MatFlow workspace for ${input.gymName} is ready`,
+    body:
+      `Hi ${firstName},\n\n` +
+      `Your MatFlow workspace for ${input.gymName} is live.\n\n` +
+      `Log in here (no password needed — link expires in 24 h):\n${magicLink}\n\n` +
+      `After you log in, a quick wizard will walk you through the last setup steps.\n\n` +
+      `Questions? Reply to this email.\n\n— The MatFlow Team`,
+    html: welcomeHtml(input, magicLink),
+  });
+}
+
+async function sendAdminNotification(input: ProvisionInput, gymId: string): Promise<void> {
+  const planLabel: Record<string, string> = { starter: "Starter", pro: "Pro", growth: "Growth" };
+  await sendEmail({
+    to:      ADMIN_EMAIL,
+    subject: `[MatFlow] New signup — ${input.gymName}`,
+    body:
+      `New gym provisioned automatically.\n\n` +
+      `Gym:      ${input.gymName}\n` +
+      `Owner:    ${input.ownerName} <${input.ownerEmail}>\n` +
+      `Plan:     ${planLabel[input.stripePlan] ?? input.stripePlan} · ${input.stripeInterval}\n` +
+      `Gym ID:   ${gymId}\n` +
+      `Session:  ${input.stripeSessionId}\n` +
+      `Customer: ${input.stripeCustomerId ?? "—"}\n` +
+      `Sub:      ${input.stripeSubscriptionId ?? "—"}\n\n` +
+      `Admin: ${SITE_URL}/admin/signups`,
+  });
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+export async function provisionPlatformGym(input: ProvisionInput): Promise<ProvisionResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+
+  // 1. Get or create auth user ────────────────────────────────────────────────
+  let userId: string;
+  let userCreated: boolean;
+  try {
+    const r = await getOrCreateAuthUser(supabase, input.ownerEmail, input.ownerName);
+    userId      = r.userId;
+    userCreated = r.created;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Auth user creation failed." };
+  }
+
+  // 2. Idempotency — existing owner? Re-send email and return early ───────────
+  if (!userCreated) {
+    const { data: existingOwnership } = await supabase
+      .from("user_gyms")
+      .select("gym_id")
+      .eq("user_id", userId)
+      .eq("role", "owner")
+      .maybeSingle();
+
+    if (existingOwnership?.gym_id) {
+      console.log(`[provision] Already provisioned for ${input.ownerEmail} — re-sending welcome email.`);
+      const magicLink = await generateMagicLink(supabase, input.ownerEmail);
+      if (magicLink) await sendWelcomeEmail(input, magicLink).catch(() => void 0);
+      return { ok: true, gymId: existingOwnership.gym_id as string, userId, alreadyProvisioned: true };
+    }
+  }
+
+  // 3. Create gym — onboarding_completed: false so wizard runs on first login ──
+  const slug = await findUniqueSlug(supabase, input.gymName);
+  const { data: gym, error: gymErr } = await supabase
+    .from("gyms")
+    .insert({
+      name:                   input.gymName.trim(),
+      slug,
+      timezone:               "America/New_York", // owner updates this in the wizard
+      free_class_nudge_after: 3,
+      onboarding_completed:   false,
+    })
+    .select("id")
+    .single();
+
+  if (gymErr || !gym) {
+    return { ok: false, error: gymErr?.message ?? "Failed to create gym record." };
+  }
+
+  const gymId = gym.id as string;
+
+  // 4. Link user as owner ─────────────────────────────────────────────────────
+  await supabase
+    .from("user_gyms")
+    .insert({ gym_id: gymId, user_id: userId, role: "owner" })
+    .catch(() => void 0);
+
+  await supabase
+    .from("profiles")
+    .upsert({ id: userId, gym_id: gymId, full_name: input.ownerName.trim(), role: "owner" })
+    .catch(() => void 0);
+
+  // 5. Seed starter membership plans ─────────────────────────────────────────
+  await supabase
+    .from("membership_plans")
+    .insert(STARTER_PLANS.map((p) => ({ ...p, gym_id: gymId })))
+    .catch(() => void 0);
+
+  // 6. Magic link + welcome email ─────────────────────────────────────────────
+  const magicLink = await generateMagicLink(supabase, input.ownerEmail);
+  if (magicLink) {
+    await sendWelcomeEmail(input, magicLink).catch((err) => {
+      console.error("[provision] Welcome email failed:", err);
+    });
+  } else {
+    console.error("[provision] Could not generate magic link for", input.ownerEmail);
+  }
+
+  // 7. Admin notification ─────────────────────────────────────────────────────
+  await sendAdminNotification(input, gymId).catch((err) => {
+    console.error("[provision] Admin notification failed:", err);
+  });
+
+  console.log(`[provision] "${input.gymName}" (${gymId}) provisioned for ${input.ownerEmail}.`);
+  return { ok: true, gymId, userId, alreadyProvisioned: false };
+}

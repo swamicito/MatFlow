@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Mail, Clock, ArrowRight } from "lucide-react";
+import { CheckCircle2, Mail, Zap, ArrowRight } from "lucide-react";
 import { getStripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -61,12 +61,12 @@ export default async function SignupConfirmedPage({
           <p className="text-[#9CA3AF] leading-relaxed">
             {gymName ? (
               <>
-                We&apos;re setting up{" "}
-                <span className="font-semibold text-white">{gymName}</span> on
-                MatFlow. Your workspace will be ready within a few hours.
+                <span className="font-semibold text-white">{gymName}</span> is
+                being provisioned automatically. Check your inbox — your login
+                link is on its way.
               </>
             ) : (
-              "Your MatFlow workspace is being set up. It will be ready within a few hours."
+              "Your MatFlow workspace is being provisioned. Check your inbox — your login link is on its way."
             )}
           </p>
         </div>
@@ -90,14 +90,14 @@ export default async function SignupConfirmedPage({
 
           <div className="flex items-center gap-4 px-5 py-4">
             <div className="h-8 w-8 rounded-lg border border-[#1f1f1f] bg-[#111] grid place-items-center shrink-0">
-              <Clock className="h-3.5 w-3.5 text-[#6B7280]" />
+              <Zap className="h-3.5 w-3.5 text-emerald-400" />
             </div>
             <div>
               <p className="text-[11px] font-medium uppercase tracking-widest text-[#555]">
-                Estimated setup time
+                Provisioning
               </p>
               <p className="text-sm font-semibold text-white">
-                Within a few hours
+                Automatic — login link sent within minutes
               </p>
             </div>
           </div>
@@ -121,12 +121,12 @@ export default async function SignupConfirmedPage({
           <h2 className="text-sm font-semibold text-white">What happens next</h2>
           <ol className="space-y-3">
             {[
-              "We receive your signup and provision your gym workspace manually.",
               ownerEmail
-                ? `We send a magic login link to ${ownerEmail} — no password needed.`
-                : "We send a magic login link to the email you provided — no password needed.",
-              "You click the link and land directly in your MatFlow dashboard.",
-              "Walk through the setup wizard, import your students, and embed your schedule.",
+                ? `A login link was sent to ${ownerEmail} — check your inbox (and spam folder).`
+                : "A login link was sent to the email you provided — check your inbox.",
+              "Click the link — no password needed. You land directly in MatFlow.",
+              "Walk through a 2-minute setup wizard to configure your gym details.",
+              "Embed your schedule on your website, import students, and go live.",
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-3">
                 <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-[11px] font-bold text-emerald-400 flex items-center justify-center">

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe, stripeStatusToDb } from "@/lib/stripe";
 import { fulfillCheckoutSession } from "@/app/(dashboard)/settings/sell/actions";
 import { fulfillInstructionalCheckout } from "@/app/(dashboard)/settings/ondemand/actions";
+import { provisionPlatformGym } from "@/lib/platform/provision";
 
 export const runtime = "nodejs"; // need Node crypto for signature verification
 export const dynamic = "force-dynamic";
@@ -116,7 +117,41 @@ export async function POST(req: NextRequest) {
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : (session.payment_intent?.id ?? null);
-        if (session.metadata?.matflow_purchase_type === "instructional") {
+
+        const purchaseType = session.metadata?.matflow_purchase_type;
+
+        if (purchaseType === "platform_subscription") {
+          // New gym owner signed up — auto-provision their workspace.
+          const subId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : (session.subscription?.id ?? null);
+          const customerId =
+            typeof session.customer === "string"
+              ? session.customer
+              : (session.customer?.id ?? null);
+
+          const result = await provisionPlatformGym({
+            gymName:              session.metadata?.gym_name    ?? "New Gym",
+            ownerName:            session.metadata?.owner_name  ?? "",
+            ownerEmail:           session.metadata?.owner_email ?? session.customer_email ?? "",
+            stripeSessionId:      session.id,
+            stripePlan:           session.metadata?.matflow_plan     ?? "",
+            stripeInterval:       session.metadata?.matflow_interval ?? "",
+            stripeCustomerId:     customerId,
+            stripeSubscriptionId: subId,
+          });
+
+          if (!result.ok) {
+            console.error("[webhook] provisionPlatformGym failed:", result.error);
+            // Return 500 so Stripe retries — provisioning is idempotent.
+            return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
+          }
+
+          console.log(
+            `[webhook] Platform gym provisioned: ${result.gymId} (already=${result.alreadyProvisioned})`,
+          );
+        } else if (purchaseType === "instructional") {
           await fulfillInstructionalCheckout(session.id, piId);
         } else {
           await fulfillCheckoutSession(session.id, piId);
