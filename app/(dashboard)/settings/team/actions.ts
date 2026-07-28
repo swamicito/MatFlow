@@ -3,7 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentGymId } from "@/lib/auth/current-gym";
+import { requireGymId } from "@/lib/auth/current-gym";
 import { getCurrentRole } from "@/lib/auth/current-role";
 import {
   ROLE_LABEL,
@@ -21,7 +21,7 @@ export type TeamMember = {
 };
 
 export async function listTeam(): Promise<
-  | { ok: true; members: TeamMember[]; gymId: string | null }
+  | { ok: true; members: TeamMember[]; gymId: string }
   | { ok: false; error: string }
 > {
   const role = await getCurrentRole();
@@ -29,15 +29,13 @@ export async function listTeam(): Promise<
     return { ok: false, error: "You don't have permission to view the team." };
   }
   const supabase = createAdminClient() as any;
-  const gymId = await getCurrentGymId();
+  const gymId = await requireGymId();
 
-  const query = supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, full_name, role, phone, created_at")
+    .eq("gym_id", gymId)
     .order("created_at", { ascending: true });
-  const { data, error } = gymId
-    ? await query.eq("gym_id", gymId)
-    : await query;
 
   if (error) return { ok: false, error: error.message };
   return {

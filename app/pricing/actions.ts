@@ -8,6 +8,12 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
 export type PricingPlan = "starter" | "pro" | "growth";
 export type BillingInterval = "monthly" | "annual";
 
+export type SignupInfo = {
+  gymName: string;
+  ownerName: string;
+  ownerEmail: string;
+};
+
 // ─── Stripe Price IDs ─────────────────────────────────────────────────────────
 // Create these products in your Stripe dashboard (see instructions below), then
 // add the Price IDs to your Vercel environment variables.
@@ -27,6 +33,7 @@ const PRICE_IDS: Record<string, string> = {
 export async function createPlatformCheckoutSession(
   plan: PricingPlan,
   interval: BillingInterval,
+  info: SignupInfo,
 ): Promise<{ ok: false; error: string }> {
   const priceId = PRICE_IDS[`${plan}_${interval}`];
 
@@ -52,6 +59,7 @@ export async function createPlatformCheckoutSession(
   try {
     session = await stripe.checkout.sessions.create({
       mode: "subscription",
+      customer_email: info.ownerEmail,
       line_items: lineItems,
       subscription_data: {
         trial_period_days: 30,
@@ -62,15 +70,23 @@ export async function createPlatformCheckoutSession(
         metadata: {
           matflow_plan: plan,
           matflow_purchase_type: "platform_subscription",
+          gym_name: info.gymName,
+          owner_name: info.ownerName,
+          owner_email: info.ownerEmail,
         },
       },
       payment_method_collection: "if_required",
       allow_promotion_codes: true,
-      success_url: `${SITE_URL}/onboarding?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      // Redirect to confirmation page — gym is provisioned manually.
+      success_url: `${SITE_URL}/signup/confirmed?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE_URL}/pricing`,
       metadata: {
         matflow_plan: plan,
+        matflow_interval: interval,
         matflow_purchase_type: "platform_subscription",
+        gym_name: info.gymName,
+        owner_name: info.ownerName,
+        owner_email: info.ownerEmail,
       },
     });
   } catch (e) {

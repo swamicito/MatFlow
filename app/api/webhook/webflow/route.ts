@@ -30,18 +30,37 @@ export async function POST(request: NextRequest) {
     const attribution = extractUtmFromPayload(body);
 
     // ── Gym lookup ─────────────────────────────────────────────────────────
+    // gym_slug must be provided in the form payload or via the
+    // WEBFLOW_DEFAULT_GYM_SLUG environment variable (site-level fallback).
+    // This makes the webhook multi-tenant: any gym can point their Webflow
+    // form at this endpoint and pass their own slug.
+    const gymSlug: string | null =
+      (body.gym_slug ?? "").trim() || process.env.WEBFLOW_DEFAULT_GYM_SLUG || null;
+
+    if (!gymSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "gym_slug is required. Pass it as a hidden field in your Webflow form " +
+            "or set WEBFLOW_DEFAULT_GYM_SLUG in your environment variables.",
+        },
+        { status: 400 },
+      );
+    }
+
     const supabase = createAdminClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: gym, error: gymError } = await (supabase as any)
       .from("gyms")
       .select("id")
-      .eq("slug", "asbury-park")
+      .eq("slug", gymSlug)
       .maybeSingle();
 
     if (gymError || !gym) {
       return NextResponse.json(
-        { success: false, error: "Gym not found" },
-        { status: 500 },
+        { success: false, error: `Gym not found for slug: ${gymSlug}` },
+        { status: 404 },
       );
     }
 

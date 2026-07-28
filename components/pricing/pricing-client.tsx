@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { CheckCircle2, X, Loader2, ArrowRight, ChevronDown, Phone } from "lucide-react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { CheckCircle2, X, Loader2, ArrowRight, ChevronDown, Phone, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
   createPlatformCheckoutSession,
   type PricingPlan,
   type BillingInterval,
+  type SignupInfo,
 } from "@/app/pricing/actions";
 
-// TODO: Replace with your real Calendly link
-const CALENDLY_URL = "https://calendly.com/matflow/strategy";
+const CALENDLY_URL =
+  "https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ3vZpZn2KfFf2T5-n933Jz0nwRP5EfBX_QqNxHMDucbImLK9zmihWmpGl6BzHkIs8TavmhqUjoV";
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
@@ -109,8 +110,15 @@ const FAQS = [
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PlanCard({ plan, cycle }: { plan: Plan; cycle: BillingInterval }) {
-  const [pending, start] = useTransition();
+function PlanCard({
+  plan,
+  cycle,
+  onSelect,
+}: {
+  plan: Plan;
+  cycle: BillingInterval;
+  onSelect: (plan: Plan, cycle: BillingInterval) => void;
+}) {
   const price = cycle === "monthly" ? plan.monthly : plan.annual;
 
   // Annual plans get white-glove onboarding waived — show it as a bonus feature.
@@ -118,13 +126,6 @@ function PlanCard({ plan, cycle }: { plan: Plan; cycle: BillingInterval }) {
     cycle === "annual" && plan.key !== "starter"
       ? [...plan.features, "White-glove onboarding ($399 value) — free"]
       : plan.features;
-
-  function handleCheckout() {
-    start(async () => {
-      const result = await createPlatformCheckoutSession(plan.key, cycle);
-      if (result && !result.ok) toast.error(result.error);
-    });
-  }
 
   return (
     <div
@@ -162,22 +163,15 @@ function PlanCard({ plan, cycle }: { plan: Plan; cycle: BillingInterval }) {
       </div>
 
       <button
-        onClick={handleCheckout}
-        disabled={pending}
-        className={`mb-8 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 ${
+        onClick={() => onSelect(plan, cycle)}
+        className={`mb-8 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all ${
           plan.popular
             ? "bg-white text-black hover:bg-white/90"
             : "border border-[#333] bg-[#1a1a1a] text-white hover:bg-[#222]"
         }`}
       >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            Start Free Trial
-            <ArrowRight className="h-3.5 w-3.5" />
-          </>
-        )}
+        Start Free Trial
+        <ArrowRight className="h-3.5 w-3.5" />
       </button>
 
       <ul className="flex flex-col gap-2.5">
@@ -194,6 +188,145 @@ function PlanCard({ plan, cycle }: { plan: Plan; cycle: BillingInterval }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// ─── Interest capture modal ────────────────────────────────────────────────────
+
+type ModalProps = {
+  plan: Plan;
+  cycle: BillingInterval;
+  info: SignupInfo;
+  onChange: (field: keyof SignupInfo, value: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onClose: () => void;
+  pending: boolean;
+  error: string | null;
+};
+
+function InterestModal({ plan, cycle, info, onChange, onSubmit, onClose, pending, error }: ModalProps) {
+  const firstRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+
+  const price = cycle === "monthly" ? plan.monthly : plan.annual;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div className="relative w-full max-w-md rounded-2xl border border-[#1f1f1f] bg-[#0d0d0d] p-8 shadow-2xl">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-[#555] hover:text-white hover:bg-[#111] transition-colors"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* Plan summary */}
+        <div className="mb-6 flex items-center gap-3">
+          <div className="rounded-lg border border-[#1f1f1f] bg-[#111] px-3 py-2 text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6B7280]">{plan.name}</p>
+            <p className="text-lg font-extrabold text-white">${price}<span className="text-xs font-normal text-[#6B7280]">/mo</span></p>
+          </div>
+          <div>
+            <h2 id="modal-title" className="text-base font-semibold text-white">
+              Almost there — tell us about your gym
+            </h2>
+            <p className="text-xs text-[#6B7280] mt-0.5">
+              We&apos;ll set your account up within a few hours.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#9CA3AF] mb-1.5" htmlFor="gym_name">
+              Gym name
+            </label>
+            <input
+              ref={firstRef}
+              id="gym_name"
+              type="text"
+              required
+              placeholder="e.g. Triangle BJJ"
+              value={info.gymName}
+              onChange={(e) => onChange("gymName", e.target.value)}
+              className="w-full rounded-xl border border-[#2a2a2a] bg-[#111] px-4 py-2.5 text-sm text-white placeholder-[#555] focus:border-[#444] focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#9CA3AF] mb-1.5" htmlFor="owner_name">
+              Your full name
+            </label>
+            <input
+              id="owner_name"
+              type="text"
+              required
+              placeholder="e.g. Carlos Mendes"
+              value={info.ownerName}
+              onChange={(e) => onChange("ownerName", e.target.value)}
+              className="w-full rounded-xl border border-[#2a2a2a] bg-[#111] px-4 py-2.5 text-sm text-white placeholder-[#555] focus:border-[#444] focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#9CA3AF] mb-1.5" htmlFor="owner_email">
+              Email address
+            </label>
+            <input
+              id="owner_email"
+              type="email"
+              required
+              placeholder="you@yourgym.com"
+              value={info.ownerEmail}
+              onChange={(e) => onChange("ownerEmail", e.target.value)}
+              className="w-full rounded-xl border border-[#2a2a2a] bg-[#111] px-4 py-2.5 text-sm text-white placeholder-[#555] focus:border-[#444] focus:outline-none transition-colors"
+            />
+          </div>
+
+          {error && (
+            <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-400">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-black transition-all hover:bg-white/90 disabled:opacity-60"
+          >
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Continue to Stripe
+                <ArrowRight className="h-3.5 w-3.5" />
+              </>
+            )}
+          </button>
+
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#555]">
+            <Lock className="h-3 w-3" />
+            <span>Secure checkout · No card required for 30-day trial</span>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -227,12 +360,83 @@ function FaqItem({
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
+const EMPTY_INFO: SignupInfo = { gymName: "", ownerName: "", ownerEmail: "" };
+
 export function PricingClient() {
   const [cycle, setCycle] = useState<BillingInterval>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
+  // ── Interest capture modal state ────────────────────────────────────────────
+  const [selectedPlan, setSelectedPlan] = useState<{ plan: Plan; cycle: BillingInterval } | null>(null);
+  const [info, setInfo] = useState<SignupInfo>(EMPTY_INFO);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handlePlanSelect(plan: Plan, cycle: BillingInterval) {
+    setSelectedPlan({ plan, cycle });
+    setInfo(EMPTY_INFO);
+    setFormError(null);
+  }
+
+  function handleModalClose() {
+    if (pending) return;
+    setSelectedPlan(null);
+    setFormError(null);
+  }
+
+  function handleFieldChange(field: keyof SignupInfo, value: string) {
+    setInfo((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleCheckout(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedPlan) return;
+
+    const trimmed: SignupInfo = {
+      gymName: info.gymName.trim(),
+      ownerName: info.ownerName.trim(),
+      ownerEmail: info.ownerEmail.trim(),
+    };
+
+    if (!trimmed.gymName || !trimmed.ownerName || !trimmed.ownerEmail) {
+      setFormError("All three fields are required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed.ownerEmail)) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+
+    setFormError(null);
+    startTransition(async () => {
+      const result = await createPlatformCheckoutSession(
+        selectedPlan.plan.key,
+        selectedPlan.cycle,
+        trimmed,
+      );
+      if (result && !result.ok) {
+        setFormError(result.error);
+        toast.error(result.error);
+      }
+    });
+  }
+
   return (
     <div className="w-full">
+      {/* ── Interest capture modal ──────────────────────────────────────────── */}
+      {selectedPlan && (
+        <InterestModal
+          plan={selectedPlan.plan}
+          cycle={selectedPlan.cycle}
+          info={info}
+          onChange={handleFieldChange}
+          onSubmit={handleCheckout}
+          onClose={handleModalClose}
+          pending={pending}
+          error={formError}
+        />
+      )}
+
       {/* ── Billing toggle ─────────────────────────────────────────────────── */}
       <div className="mb-12 flex items-center justify-center gap-4">
         <span
@@ -266,7 +470,7 @@ export function PricingClient() {
       {/* ── Pricing cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {PLANS.map((plan) => (
-          <PlanCard key={plan.key} plan={plan} cycle={cycle} />
+          <PlanCard key={plan.key} plan={plan} cycle={cycle} onSelect={handlePlanSelect} />
         ))}
       </div>
 

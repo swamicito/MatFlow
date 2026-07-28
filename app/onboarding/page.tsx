@@ -28,13 +28,19 @@ export default async function OnboardingPage() {
       <div className="min-h-screen grid place-items-center px-4">
         <div className="max-w-md text-center space-y-3">
           <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Workspace not found
+            Account not ready yet
           </h1>
           <p className="text-sm text-[#aaa]">
-            Couldn&apos;t locate the academy workspace. Make sure a row exists
-            in <code>gyms</code> with{" "}
-            <code className="font-mono">slug = &quot;asbury-park&quot;</code>{" "}
-            (or set <code>ASBURY_PARK_GYM_ID</code>).
+            Your gym workspace is still being set up. You&apos;ll receive an
+            email with your login link once it&apos;s ready — usually within a
+            few hours. If you have questions, reply to that email or contact{" "}
+            <a
+              href="mailto:support@mat-flow.net"
+              className="text-emerald-400 hover:underline"
+            >
+              support@mat-flow.net
+            </a>
+            .
           </p>
         </div>
       </div>

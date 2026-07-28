@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ShieldCheck, Building2, Plus, LayoutDashboard } from "lucide-react";
+import { ShieldCheck, Building2, Plus, LayoutDashboard, Inbox } from "lucide-react";
 import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 import { logoutPlatformAdmin } from "@/app/admin/login/actions";
 
@@ -38,6 +38,13 @@ export default async function ProtectedAdminLayout({
           >
             <Plus className="h-3.5 w-3.5" />
             New Gym
+          </Link>
+          <Link
+            href="/admin/signups"
+            className="inline-flex items-center gap-1.5 text-xs text-[#777] hover:text-white hover:bg-[#0f0f0f] px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Inbox className="h-3.5 w-3.5" />
+            Pending Signups
           </Link>
         </nav>
 
