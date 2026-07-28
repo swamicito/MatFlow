@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+export const dynamic = "force-dynamic";
+
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
