@@ -21,7 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/messaging";
 
 const SITE_URL    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
-const ADMIN_EMAIL = process.env.MATFLOW_ADMIN_EMAIL  ?? "support@mat-flow.net";
+const ADMIN_EMAIL = process.env.MATFLOW_ADMIN_EMAIL  ?? "steve@mat-flow.net";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
