@@ -19,10 +19,14 @@ const INTERVAL_LABEL: Record<string, string> = {
 async function getSessionData(sessionId: string) {
   try {
     const stripe = getStripe();
-    if (!stripe) return null;
+    if (!stripe) {
+      console.warn("[signup/confirmed] Stripe not configured — session details unavailable.");
+      return null;
+    }
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     return session;
-  } catch {
+  } catch (err) {
+    console.error("[signup/confirmed] Failed to retrieve Stripe session:", err);
     return null;
   }
 }
@@ -32,15 +36,28 @@ export default async function SignupConfirmedPage({
 }: {
   searchParams: Promise<{ session_id?: string }>;
 }) {
-  const { session_id } = await searchParams;
+  // Wrap all async data fetching — a crash here would blank the page in production.
+  let gymName:    string | null = null;
+  let ownerEmail: string | null = null;
+  let plan:       string | null = null;
+  let interval:   string | null = null;
 
-  const session = session_id ? await getSessionData(session_id) : null;
-
-  const gymName    = session?.metadata?.gym_name    ?? null;
-  const ownerName  = session?.metadata?.owner_name  ?? null;
-  const ownerEmail = session?.metadata?.owner_email ?? session?.customer_email ?? null;
-  const plan       = session?.metadata?.matflow_plan     ?? null;
-  const interval   = session?.metadata?.matflow_interval ?? null;
+  try {
+    const params    = await searchParams;
+    const sessionId = params?.session_id;
+    if (sessionId) {
+      const session = await getSessionData(sessionId);
+      if (session) {
+        gymName    = session.metadata?.gym_name    ?? null;
+        ownerEmail = session.metadata?.owner_email ?? session.customer_email ?? null;
+        plan       = session.metadata?.matflow_plan     ?? null;
+        interval   = session.metadata?.matflow_interval ?? null;
+      }
+    }
+  } catch (err) {
+    console.error("[signup/confirmed] Unexpected error loading page data:", err);
+    // Fall through — page renders with null values (graceful degradation)
+  }
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
