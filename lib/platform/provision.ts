@@ -20,8 +20,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/messaging";
 
-const SITE_URL    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
-const ADMIN_EMAIL = process.env.MATFLOW_ADMIN_EMAIL  ?? "steve@mat-flow.net";
+// Always use the canonical production domain — never rely on NEXT_PUBLIC_SITE_URL
+// which may point to the Vercel preview URL.
+const CANONICAL_URL = "https://www.mat-flow.net";
+const ADMIN_EMAIL   = process.env.MATFLOW_ADMIN_EMAIL ?? "steve@mat-flow.net";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -103,7 +105,7 @@ async function generateMagicLink(supabase: any, email: string): Promise<string |
     const { data } = await supabase.auth.admin.generateLink({
       type:    "magiclink",
       email,
-      options: { redirectTo: `${SITE_URL}/auth/callback?next=/dashboard` },
+      options: { redirectTo: `${CANONICAL_URL}/auth/callback?next=/dashboard` },
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data as any)?.properties?.action_link ?? null;
@@ -169,7 +171,7 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
 
     <p style="margin:0;font-size:12px;color:#555;line-height:1.5;">
       This link expires in 24&nbsp;hours. After that,
-      <a href="${SITE_URL}/login" style="color:#4ade80;text-decoration:none;">request a new one here</a>.
+      <a href="${CANONICAL_URL}/login" style="color:#4ade80;text-decoration:none;">request a new one here</a>.
     </p>
   </td></tr>
 
@@ -216,29 +218,35 @@ async function sendAdminNotification(input: ProvisionInput, gymId: string): Prom
       `Session:  ${input.stripeSessionId}\n` +
       `Customer: ${input.stripeCustomerId ?? "—"}\n` +
       `Sub:      ${input.stripeSubscriptionId ?? "—"}\n\n` +
-      `Admin: ${SITE_URL}/admin/signups`,
+      `Admin: ${CANONICAL_URL}/admin/signups`,
   });
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function provisionPlatformGym(input: ProvisionInput): Promise<ProvisionResult> {
+  console.log(`[provision] START — gym="${input.gymName}" owner=${input.ownerEmail} session=${input.stripeSessionId}`);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
   // 1. Get or create auth user ────────────────────────────────────────────────
+  console.log(`[provision] Step 1: get-or-create auth user for ${input.ownerEmail}`);
   let userId: string;
   let userCreated: boolean;
   try {
     const r = await getOrCreateAuthUser(supabase, input.ownerEmail, input.ownerName);
     userId      = r.userId;
     userCreated = r.created;
+    console.log(`[provision] Step 1 OK: userId=${userId} created=${userCreated}`);
   } catch (err) {
+    console.error("[provision] Step 1 FAILED:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Auth user creation failed." };
   }
 
   // 2. Idempotency — existing owner? Re-send email and return early ───────────
   if (!userCreated) {
+    console.log(`[provision] Step 2: user existed — checking for existing gym ownership`);
     const { data: existingOwnership } = await supabase
       .from("user_gyms")
       .select("gym_id")
@@ -247,21 +255,26 @@ export async function provisionPlatformGym(input: ProvisionInput): Promise<Provi
       .maybeSingle();
 
     if (existingOwnership?.gym_id) {
-      console.log(`[provision] Already provisioned for ${input.ownerEmail} — re-sending welcome email.`);
+      console.log(`[provision] Step 2: already provisioned gymId=${existingOwnership.gym_id} — re-sending welcome email`);
       const magicLink = await generateMagicLink(supabase, input.ownerEmail);
-      if (magicLink) await sendWelcomeEmail(input, magicLink).catch(() => void 0);
+      console.log(`[provision] Magic link for re-send: ${magicLink ? "generated" : "FAILED — using /login fallback"}`);
+      await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`).catch((e) =>
+        console.error("[provision] Re-send welcome email FAILED:", e),
+      );
       return { ok: true, gymId: existingOwnership.gym_id as string, userId, alreadyProvisioned: true };
     }
+    console.log(`[provision] Step 2: no existing gym — proceeding with full provisioning`);
   }
 
   // 3. Create gym — onboarding_completed: false so wizard runs on first login ──
   const slug = await findUniqueSlug(supabase, input.gymName);
+  console.log(`[provision] Step 3: creating gym slug="${slug}"`);
   const { data: gym, error: gymErr } = await supabase
     .from("gyms")
     .insert({
       name:                   input.gymName.trim(),
       slug,
-      timezone:               "America/New_York", // owner updates this in the wizard
+      timezone:               "America/New_York",
       free_class_nudge_after: 3,
       onboarding_completed:   false,
     })
@@ -269,43 +282,55 @@ export async function provisionPlatformGym(input: ProvisionInput): Promise<Provi
     .single();
 
   if (gymErr || !gym) {
+    console.error("[provision] Step 3 FAILED:", gymErr);
     return { ok: false, error: gymErr?.message ?? "Failed to create gym record." };
   }
-
   const gymId = gym.id as string;
+  console.log(`[provision] Step 3 OK: gymId=${gymId}`);
 
   // 4. Link user as owner ─────────────────────────────────────────────────────
-  await supabase
+  console.log(`[provision] Step 4: linking user as owner`);
+  const { error: ugErr } = await supabase
     .from("user_gyms")
-    .insert({ gym_id: gymId, user_id: userId, role: "owner" })
-    .catch(() => void 0);
+    .insert({ gym_id: gymId, user_id: userId, role: "owner" });
+  if (ugErr) console.error("[provision] Step 4 user_gyms insert error (non-fatal):", ugErr);
 
-  await supabase
+  const { error: profErr } = await supabase
     .from("profiles")
-    .upsert({ id: userId, gym_id: gymId, full_name: input.ownerName.trim(), role: "owner" })
-    .catch(() => void 0);
+    .upsert({ id: userId, gym_id: gymId, full_name: input.ownerName.trim(), role: "owner" });
+  if (profErr) console.error("[provision] Step 4 profiles upsert error (non-fatal):", profErr);
 
   // 5. Seed starter membership plans ─────────────────────────────────────────
-  await supabase
+  console.log(`[provision] Step 5: seeding ${STARTER_PLANS.length} membership plans`);
+  const { error: plansErr } = await supabase
     .from("membership_plans")
-    .insert(STARTER_PLANS.map((p) => ({ ...p, gym_id: gymId })))
-    .catch(() => void 0);
+    .insert(STARTER_PLANS.map((p) => ({ ...p, gym_id: gymId })));
+  if (plansErr) console.error("[provision] Step 5 plans seed error (non-fatal):", plansErr);
+  else console.log(`[provision] Step 5 OK: ${STARTER_PLANS.length} plans seeded`);
 
   // 6. Magic link + welcome email ─────────────────────────────────────────────
+  console.log(`[provision] Step 6: generating magic link for ${input.ownerEmail}`);
   const magicLink = await generateMagicLink(supabase, input.ownerEmail);
   if (magicLink) {
-    await sendWelcomeEmail(input, magicLink).catch((err) => {
-      console.error("[provision] Welcome email failed:", err);
-    });
+    console.log(`[provision] Step 6: magic link generated OK`);
   } else {
-    console.error("[provision] Could not generate magic link for", input.ownerEmail);
+    console.error(`[provision] Step 6: magic link generation FAILED — will use /login fallback in email`);
   }
 
-  // 7. Admin notification ─────────────────────────────────────────────────────
-  await sendAdminNotification(input, gymId).catch((err) => {
-    console.error("[provision] Admin notification failed:", err);
-  });
+  // Always send the welcome email — fallback to /login if magic link is unavailable.
+  console.log(`[provision] Step 6: sending welcome email to ${input.ownerEmail}`);
+  const emailResult = await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`)
+    .then(() => "sent")
+    .catch((err) => { console.error("[provision] Step 6 welcome email FAILED:", err); return "failed"; });
+  console.log(`[provision] Step 6: welcome email result = ${emailResult}`);
 
-  console.log(`[provision] "${input.gymName}" (${gymId}) provisioned for ${input.ownerEmail}.`);
+  // 7. Admin notification ─────────────────────────────────────────────────────
+  console.log(`[provision] Step 7: sending admin notification to ${ADMIN_EMAIL}`);
+  const adminResult = await sendAdminNotification(input, gymId)
+    .then(() => "sent")
+    .catch((err) => { console.error("[provision] Step 7 admin notification FAILED:", err); return "failed"; });
+  console.log(`[provision] Step 7: admin notification result = ${adminResult}`);
+
+  console.log(`[provision] DONE — "${input.gymName}" (${gymId}) provisioned for ${input.ownerEmail}. email=${emailResult}`);
   return { ok: true, gymId, userId, alreadyProvisioned: false };
 }

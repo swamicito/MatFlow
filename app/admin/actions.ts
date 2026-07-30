@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 import { GYM_COOKIE } from "@/lib/auth/current-gym";
+import { getStripe } from "@/lib/stripe";
+import { provisionPlatformGym } from "@/lib/platform/provision";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -217,6 +219,66 @@ export async function checkSlugAvailable(
     .eq("slug", slug)
     .maybeSingle();
   return { available: !data };
+}
+
+// ── Provision signup from Stripe session ─────────────────────────────────────
+// Called from the admin signups page "Provision" button. Fetches the Stripe
+// session to get owner details, then runs the full provisionPlatformGym flow
+// (creates auth user, gym, seeds plans, sends welcome email).
+
+export async function provisionSignupFromSession(
+  sessionId: string,
+): Promise<ActionResult<{ gymId: string; alreadyProvisioned: boolean }>> {
+  if (!(await isPlatformAdmin())) {
+    return { ok: false, error: "Platform admin access required." };
+  }
+
+  console.log(`[admin/provision] provisionSignupFromSession called for sessionId=${sessionId}`);
+
+  const stripe = getStripe();
+  if (!stripe) {
+    return { ok: false, error: "Stripe is not configured on this server." };
+  }
+
+  let session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (err) {
+    console.error("[admin/provision] Failed to retrieve Stripe session:", err);
+    return { ok: false, error: "Could not retrieve Stripe session. Check STRIPE_SECRET_KEY." };
+  }
+
+  const ownerEmail = session.metadata?.owner_email ?? session.customer_email ?? "";
+  if (!ownerEmail) {
+    return { ok: false, error: "No owner email found on this Stripe session." };
+  }
+
+  const subId = typeof session.subscription === "string"
+    ? session.subscription
+    : (session.subscription as { id?: string } | null)?.id ?? null;
+  const customerId = typeof session.customer === "string"
+    ? session.customer
+    : (session.customer as { id?: string } | null)?.id ?? null;
+
+  const result = await provisionPlatformGym({
+    gymName:              session.metadata?.gym_name    ?? "New Gym",
+    ownerName:            session.metadata?.owner_name  ?? "",
+    ownerEmail,
+    stripeSessionId:      sessionId,
+    stripePlan:           session.metadata?.matflow_plan     ?? "",
+    stripeInterval:       session.metadata?.matflow_interval ?? "",
+    stripeCustomerId:     customerId,
+    stripeSubscriptionId: subId,
+  });
+
+  if (!result.ok) {
+    console.error("[admin/provision] provisionPlatformGym failed:", result.error);
+    return { ok: false, error: result.error };
+  }
+
+  console.log(`[admin/provision] Success: gymId=${result.gymId} alreadyProvisioned=${result.alreadyProvisioned}`);
+  revalidatePath("/admin/signups");
+  return { ok: true, data: { gymId: result.gymId, alreadyProvisioned: result.alreadyProvisioned } };
 }
 
 // ── Switch active gym ─────────────────────────────────────────────────────────

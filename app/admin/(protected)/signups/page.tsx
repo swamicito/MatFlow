@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Inbox, CheckCircle2, Clock, XCircle, ExternalLink, Plus } from "lucide-react";
 import { getStripe } from "@/lib/stripe";
 import type Stripe from "stripe";
+import { ProvisionButton } from "./provision-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pending Signups · Platform Admin" };
@@ -163,12 +164,7 @@ export default async function AdminSignupsPage() {
 
               <div className="flex items-center gap-2 shrink-0">
                 {signup.status === "complete" && (
-                  <Link
-                    href={`/admin/gyms/new?name=${encodeURIComponent(signup.gymName)}&email=${encodeURIComponent(signup.ownerEmail)}&owner=${encodeURIComponent(signup.ownerName)}`}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white text-black text-xs font-semibold hover:bg-white/90 transition-colors"
-                  >
-                    Provision
-                  </Link>
+                  <ProvisionButton sessionId={signup.sessionId} />
                 )}
                 <a
                   href={`https://dashboard.stripe.com/checkout/sessions/${signup.sessionId}`}
