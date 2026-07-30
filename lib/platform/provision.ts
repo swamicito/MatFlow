@@ -76,40 +76,108 @@ async function getOrCreateAuthUser(
   email: string,
   fullName: string,
 ): Promise<{ userId: string; created: boolean }> {
-  const { data: newUser, error } = await supabase.auth.admin.createUser({
+
+  // ── Strategy 1: createUser ──────────────────────────────────────────────────
+  console.log(`[provision/auth] Strategy 1: admin.createUser for ${email}`);
+  const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
     email,
     email_confirm: true,
     user_metadata: { full_name: fullName },
   });
 
-  if (!error && newUser?.user?.id) {
+  if (!createErr && newUser?.user?.id) {
+    console.log(`[provision/auth] Strategy 1 OK: userId=${newUser.user.id}`);
     return { userId: newUser.user.id as string, created: true };
   }
 
-  // User already exists — find by scanning the list (safe at low volume).
-  const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existing = (list?.users ?? []).find((u: any) =>
-    (u.email ?? "").toLowerCase() === email.toLowerCase(),
+  console.warn(
+    `[provision/auth] Strategy 1 failed: ` +
+    `code=${createErr?.code ?? "n/a"} ` +
+    `status=${createErr?.status ?? "n/a"} ` +
+    `message="${createErr?.message ?? "none"}" ` +
+    `— trying Strategy 2 (generateLink)`,
   );
-  if (existing?.id) return { userId: existing.id as string, created: false };
 
+  // ── Strategy 2: generateLink(magiclink) ─────────────────────────────────────
+  // admin.generateLink is Supabase's canonical get-or-create for magic link flows:
+  // it creates the user if they don't exist, finds them if they do, and returns
+  // the userId in both cases. This sidesteps the listUsers pagination problem.
+  const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+    type:    "magiclink",
+    email,
+    options: {
+      data:       { full_name: fullName },
+      redirectTo: `${CANONICAL_URL}/auth/callback?next=/dashboard`,
+    },
+  });
+
+  if (!linkErr && linkData?.user?.id) {
+    console.log(`[provision/auth] Strategy 2 OK: userId=${linkData.user.id}`);
+    return { userId: linkData.user.id as string, created: false };
+  }
+
+  console.warn(
+    `[provision/auth] Strategy 2 failed: ` +
+    `code=${linkErr?.code ?? "n/a"} ` +
+    `status=${linkErr?.status ?? "n/a"} ` +
+    `message="${linkErr?.message ?? "none"}" ` +
+    `— trying Strategy 3 (listUsers scan)`,
+  );
+
+  // ── Strategy 3: paginated listUsers scan ────────────────────────────────────
+  for (let page = 1; page <= 5; page++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: listData, error: listErr } = await (supabase.auth.admin.listUsers as any)({
+      perPage: 1000,
+      page,
+    });
+    if (listErr) {
+      console.error(`[provision/auth] Strategy 3 listUsers page=${page} error: ${listErr.message}`);
+      break;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const users: any[] = listData?.users ?? [];
+    console.log(`[provision/auth] Strategy 3 page=${page}: ${users.length} users returned`);
+    const found = users.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (u: any) => (u.email ?? "").toLowerCase() === email.toLowerCase(),
+    );
+    if (found?.id) {
+      console.log(`[provision/auth] Strategy 3 OK: found userId=${found.id} on page=${page}`);
+      return { userId: found.id as string, created: false };
+    }
+    if (users.length < 1000) break; // no more pages
+  }
+
+  // All three strategies failed — include all error messages for diagnosis.
   throw new Error(
-    `Could not create or find auth user for ${email}: ${error?.message ?? "unknown error"}`,
+    `Cannot get-or-create auth user for "${email}". ` +
+    `createUser: "${createErr?.message ?? "no error"}". ` +
+    `generateLink: "${linkErr?.message ?? "no error"}". ` +
+    `listUsers: no match found.`,
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function generateMagicLink(supabase: any, email: string): Promise<string | null> {
   try {
-    const { data } = await supabase.auth.admin.generateLink({
+    const { data, error } = await supabase.auth.admin.generateLink({
       type:    "magiclink",
       email,
       options: { redirectTo: `${CANONICAL_URL}/auth/callback?next=/dashboard` },
     });
+    if (error) {
+      console.error(`[provision/magic-link] generateLink error: code=${error.code} message="${error.message}"`);
+      return null;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data as any)?.properties?.action_link ?? null;
-  } catch {
+    const link = (data as any)?.properties?.action_link ?? null;
+    if (!link) {
+      console.warn(`[provision/magic-link] generateLink succeeded but action_link is missing — data keys: ${Object.keys(data ?? {}).join(", ")}`);
+    }
+    return link;
+  } catch (err) {
+    console.error(`[provision/magic-link] generateLink threw unexpectedly:`, err);
     return null;
   }
 }
