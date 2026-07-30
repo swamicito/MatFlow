@@ -185,7 +185,7 @@ async function generateMagicLink(supabase: any, email: string): Promise<string |
 // ─── Email templates ──────────────────────────────────────────────────────────
 
 function welcomeHtml(input: ProvisionInput, magicLink: string): string {
-  const firstName = input.ownerName.split(" ")[0];
+  const firstName = input.ownerName.split(" ")[0] || "there";
   const steps = [
     "Walk through a 2-minute setup wizard to confirm your gym details and timezone.",
     "Copy your one-line embed code and add your schedule to your website.",
@@ -195,73 +195,130 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your MatFlow workspace is ready</title></head>
-<body style="margin:0;padding:0;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#000;padding:48px 20px;">
-<tr><td align="center">
-<table width="520" cellpadding="0" cellspacing="0" style="background:#0d0d0d;border:1px solid #1f1f1f;border-radius:16px;overflow:hidden;max-width:520px;width:100%;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your MatFlow workspace is ready</title>
+</head>
+<body style="margin:0;padding:0;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
 
-  <tr><td style="padding:28px 36px 24px;border-bottom:1px solid #1a1a1a;">
-    <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#555;">MatFlow</p>
-  </td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#000000;min-height:100vh;">
+<tr><td align="center" style="padding:48px 20px 64px;">
 
-  <tr><td style="padding:32px 36px 28px;">
-    <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;line-height:1.3;color:#fff;">
-      Your workspace is ready, ${firstName}!
-    </h1>
-    <p style="margin:0 0 28px;font-size:14px;line-height:1.65;color:#9CA3AF;">
-      <strong style="color:#fff;">${input.gymName}</strong> is live on MatFlow.
-      Click the button below to log&nbsp;in — no password needed.
-    </p>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
 
-    <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
-      <tr><td style="background:#fff;border-radius:10px;">
-        <a href="${magicLink}"
-           style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#000;text-decoration:none;white-space:nowrap;">
-          Log in to MatFlow →
-        </a>
-      </td></tr>
-    </table>
+    <!-- Logo -->
+    <tr><td align="center" style="padding-bottom:36px;">
+      <a href="${CANONICAL_URL}" style="text-decoration:none;">
+        <img src="${CANONICAL_URL}/logo-full.png"
+             alt="MatFlow"
+             width="140"
+             style="display:block;height:auto;border:0;max-width:140px;" />
+      </a>
+    </td></tr>
 
-    <p style="margin:0 0 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#4B5563;">
-      What happens next
-    </p>
-    <table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 28px;">
-      ${steps.map((step, i) => `
-      <tr>
-        <td width="26" valign="top" style="padding:3px 10px 8px 0;">
-          <span style="display:inline-block;width:20px;height:20px;background:#052e16;border:1px solid #14532d;border-radius:50%;font-size:10px;font-weight:700;color:#4ade80;text-align:center;line-height:20px;">${i + 1}</span>
-        </td>
-        <td style="padding:3px 0 8px;font-size:13px;line-height:1.55;color:#9CA3AF;">${step}</td>
-      </tr>`).join("")}
-    </table>
+    <!-- Card -->
+    <tr><td style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:16px;overflow:hidden;">
 
-    <p style="margin:0;font-size:12px;color:#555;line-height:1.5;">
-      This link expires in 24&nbsp;hours. After that,
-      <a href="${CANONICAL_URL}/login" style="color:#4ade80;text-decoration:none;">request a new one here</a>.
-    </p>
-  </td></tr>
+      <!-- Card body -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
 
-  <tr><td style="padding:18px 36px;border-top:1px solid #1a1a1a;">
-    <p style="margin:0;font-size:11px;color:#555;">
-      Questions? Reply to this email or write to
-      <a href="mailto:${ADMIN_EMAIL}" style="color:#4ade80;text-decoration:none;">${ADMIN_EMAIL}</a>
-    </p>
-  </td></tr>
+        <!-- Headline -->
+        <tr><td style="padding:40px 40px 8px;">
+          <h1 style="margin:0;font-size:24px;font-weight:700;line-height:1.25;color:#ffffff;letter-spacing:-0.3px;">
+            Your workspace is ready${firstName !== "there" ? `, ${firstName}` : ""}!
+          </h1>
+        </td></tr>
 
-</table>
+        <!-- Subtext -->
+        <tr><td style="padding:12px 40px 32px;">
+          <p style="margin:0;font-size:15px;line-height:1.6;color:#9CA3AF;">
+            <strong style="color:#ffffff;font-weight:600;">${input.gymName}</strong> is live on MatFlow.
+            Click below to log&nbsp;in — no password needed.
+          </p>
+        </td></tr>
+
+        <!-- CTA button -->
+        <tr><td align="left" style="padding:0 40px 36px;">
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="background:#ffffff;border-radius:10px;">
+                <a href="${magicLink}"
+                   style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#000000;text-decoration:none;white-space:nowrap;letter-spacing:-0.1px;">
+                  Log in to MatFlow &rarr;
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="border-top:1px solid #1a1a1a;font-size:0;">&nbsp;</td></tr>
+          </table>
+        </td></tr>
+
+        <!-- What happens next -->
+        <tr><td style="padding:28px 40px 8px;">
+          <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#4B5563;">
+            What happens next
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:12px 40px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            ${steps.map((step, i) => `
+            <tr>
+              <td width="28" valign="top" style="padding:2px 12px 12px 0;">
+                <span style="display:inline-block;width:20px;height:20px;background:#052e16;border:1px solid #14532d;border-radius:50%;font-size:10px;font-weight:700;color:#4ade80;text-align:center;line-height:20px;">${i + 1}</span>
+              </td>
+              <td style="padding:2px 0 12px;font-size:13px;line-height:1.6;color:#9CA3AF;">${step}</td>
+            </tr>`).join("")}
+          </table>
+        </td></tr>
+
+        <!-- Link expiry note -->
+        <tr><td style="padding:0 40px 36px;">
+          <p style="margin:0;font-size:12px;line-height:1.5;color:#4B5563;">
+            This link expires in 24&nbsp;hours. After that, you can
+            <a href="${CANONICAL_URL}/login" style="color:#6B7280;text-decoration:underline;">request a new one</a>.
+          </p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px;border-top:1px solid #1a1a1a;">
+          <p style="margin:0;font-size:12px;line-height:1.5;color:#4B5563;">
+            Questions? Email us at
+            <a href="mailto:support@mat-flow.net" style="color:#6B7280;text-decoration:underline;">support@mat-flow.net</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+    <!-- / Card -->
+
+    <!-- Bottom wordmark -->
+    <tr><td align="center" style="padding-top:32px;">
+      <p style="margin:0;font-size:11px;color:#333333;letter-spacing:0.08em;">
+        MATFLOW &mdash; Gym Management Software
+      </p>
+    </td></tr>
+
+  </table>
 </td></tr>
 </table>
+
 </body>
 </html>`;
 }
 
 async function sendWelcomeEmail(input: ProvisionInput, magicLink: string): Promise<void> {
-  const firstName = input.ownerName.split(" ")[0];
+  const firstName = input.ownerName.split(" ")[0] || "there";
   await sendEmail({
-    to:      input.ownerEmail,
-    subject: `Your MatFlow workspace for ${input.gymName} is ready`,
+    to:       input.ownerEmail,
+    fromName: "MatFlow",
+    subject:  `Your MatFlow workspace for ${input.gymName} is ready`,
     body:
       `Hi ${firstName},\n\n` +
       `Your MatFlow workspace for ${input.gymName} is live.\n\n` +
