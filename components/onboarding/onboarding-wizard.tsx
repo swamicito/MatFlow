@@ -130,8 +130,8 @@ export function OnboardingWizard({
   );
 
   const webhookUrl = useMemo(() => {
-    if (typeof window === "undefined") return "/api/webhook/webflow";
-    return `${window.location.origin}/api/webhook/webflow`;
+    if (typeof window === "undefined") return "/api/webhook/leads";
+    return `${window.location.origin}/api/webhook/leads`;
   }, []);
 
   // ── Step 6 confetti ──────────────────────
@@ -376,14 +376,13 @@ function TopBar({ step }: { step: number }) {
   return (
     <div className="border-b border-[#1a1a1a] bg-black sticky top-0 z-30">
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-md bg-white text-black grid place-items-center font-semibold text-xs">
-            M
-          </div>
-          <span className="text-sm font-semibold tracking-tight text-white">
-            MatFlow
-          </span>
-          <span className="hidden sm:inline text-xs uppercase tracking-widest text-[#666] ml-2">
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo-full.png"
+            alt="MatFlow"
+            className="h-7 w-auto"
+          />
+          <span className="hidden sm:inline text-xs uppercase tracking-widest text-[#666]">
             Onboarding
           </span>
         </div>
@@ -826,7 +825,7 @@ function Step5({
       icon={Globe}
       eyebrow="Step 5 of 6 · Optional"
       title="Pipe leads in from your website."
-      description="Point your Webflow form (or any form platform that supports webhooks) at this URL. Every submission lands in /leads instantly."
+      description="Point any contact form on your website at this URL — it works with Webflow, Framer, Squarespace, custom HTML forms, and any platform that supports webhooks. Every submission lands in /leads instantly."
     >
       <div className="space-y-4">
         <div>
@@ -851,19 +850,18 @@ function Step5({
 
         <div className="rounded-md border border-[#1f1f1f] bg-[#0a0a0a] p-4 space-y-3">
           <p className="text-xs uppercase tracking-widest text-[#888]">
-            How to wire it up in Webflow
+            How to connect your form
           </p>
           <ol className="text-sm text-[#ccc] space-y-2 list-decimal pl-5">
-            <li>Open your form&apos;s Settings panel.</li>
+            <li>Open your form&apos;s settings and find the webhook or form-action field.</li>
             <li>
-              Set the <span className="text-white">Form Action</span> to the
-              URL above.
+              Paste the URL above as the <span className="text-white">webhook / form action</span>.
             </li>
             <li>
-              Make sure your form fields are named <code>name</code>,{" "}
+              Name your form fields <code>name</code>,{" "}
               <code>email</code>, and (optional) <code>phone</code>.
             </li>
-            <li>Publish your site and submit a real entry to verify.</li>
+            <li>Publish and submit a test entry to confirm it appears in /leads.</li>
           </ol>
         </div>
 
