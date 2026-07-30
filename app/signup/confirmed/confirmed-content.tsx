@@ -47,6 +47,10 @@ export default function ConfirmedContent() {
       style={{ minHeight: "100vh", background: "#000" }}
       className="flex flex-col items-center justify-center p-6"
     >
+      {/* DEBUG BANNER — remove after confirming page loads */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, background: "#dc2626", color: "#fff", textAlign: "center", padding: "8px", fontSize: 13, fontWeight: 700, zIndex: 9999, fontFamily: "monospace" }}>
+        CONFIRMED PAGE LOADED — VERSION 2
+      </div>
       <div className="w-full max-w-lg space-y-8">
 
         {/* Success icon */}
