@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { requireStripe } from "@/lib/stripe";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
+// Always use the canonical production domain for Stripe redirect URLs so the
+// user lands on the real site regardless of which deployment created the session.
+const CHECKOUT_BASE_URL = "https://www.mat-flow.net";
 
 export type PricingPlan = "starter" | "pro" | "growth";
 export type BillingInterval = "monthly" | "annual";
@@ -78,8 +80,8 @@ export async function createPlatformCheckoutSession(
       payment_method_collection: "if_required",
       allow_promotion_codes: true,
       // Redirect to confirmation page — gym is provisioned manually.
-      success_url: `${SITE_URL}/signup/confirmed?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL}/pricing`,
+      success_url: `${CHECKOUT_BASE_URL}/signup/confirmed?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${CHECKOUT_BASE_URL}/pricing`,
       metadata: {
         matflow_plan: plan,
         matflow_interval: interval,
