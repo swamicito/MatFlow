@@ -313,38 +313,60 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
 </html>`;
 }
 
-async function sendWelcomeEmail(input: ProvisionInput, magicLink: string): Promise<void> {
+async function sendWelcomeEmail(input: ProvisionInput, magicLink: string): Promise<string> {
   const firstName = input.ownerName.split(" ")[0] || "there";
-  await sendEmail({
-    to:       input.ownerEmail,
-    fromName: "MatFlow",
-    subject:  `Your MatFlow workspace for ${input.gymName} is ready`,
-    body:
-      `Hi ${firstName},\n\n` +
-      `Your MatFlow workspace for ${input.gymName} is live.\n\n` +
-      `Log in here (no password needed — link expires in 24 h):\n${magicLink}\n\n` +
-      `After you log in, a quick wizard will walk you through the last setup steps.\n\n` +
-      `Questions? Reply to this email.\n\n— The MatFlow Team`,
-    html: welcomeHtml(input, magicLink),
-  });
+  try {
+    const result = await sendEmail({
+      to:       input.ownerEmail,
+      fromName: "MatFlow",
+      subject:  `Your MatFlow workspace for ${input.gymName} is ready`,
+      body:
+        `Hi ${firstName},\n\n` +
+        `Your MatFlow workspace for ${input.gymName} is live.\n\n` +
+        `Log in here (no password needed — link expires in 24 h):\n${magicLink}\n\n` +
+        `After you log in, a quick wizard will walk you through the last setup steps.\n\n` +
+        `Questions? Reply to this email.\n\n— The MatFlow Team`,
+      html: welcomeHtml(input, magicLink),
+    });
+    if (result.ok) {
+      console.log(`[provision/email] Welcome email to ${input.ownerEmail}: status=${result.status} providerId=${result.providerId ?? "n/a"}`);
+      return result.status; // "sent" | "simulated"
+    }
+    console.error(`[provision/email] Resend REJECTED welcome email to ${input.ownerEmail}: ${result.error}`);
+    return "failed";
+  } catch (err) {
+    console.error(`[provision/email] Welcome email to ${input.ownerEmail} threw unexpectedly:`, err);
+    return "failed";
+  }
 }
 
-async function sendAdminNotification(input: ProvisionInput, gymId: string): Promise<void> {
+async function sendAdminNotification(input: ProvisionInput, gymId: string): Promise<string> {
   const planLabel: Record<string, string> = { starter: "Starter", pro: "Pro", growth: "Growth" };
-  await sendEmail({
-    to:      ADMIN_EMAIL,
-    subject: `[MatFlow] New signup — ${input.gymName}`,
-    body:
-      `New gym provisioned automatically.\n\n` +
-      `Gym:      ${input.gymName}\n` +
-      `Owner:    ${input.ownerName} <${input.ownerEmail}>\n` +
-      `Plan:     ${planLabel[input.stripePlan] ?? input.stripePlan} · ${input.stripeInterval}\n` +
-      `Gym ID:   ${gymId}\n` +
-      `Session:  ${input.stripeSessionId}\n` +
-      `Customer: ${input.stripeCustomerId ?? "—"}\n` +
-      `Sub:      ${input.stripeSubscriptionId ?? "—"}\n\n` +
-      `Admin: ${CANONICAL_URL}/admin/signups`,
-  });
+  try {
+    const result = await sendEmail({
+      to:      ADMIN_EMAIL,
+      subject: `[MatFlow] New signup — ${input.gymName}`,
+      body:
+        `New gym provisioned automatically.\n\n` +
+        `Gym:      ${input.gymName}\n` +
+        `Owner:    ${input.ownerName} <${input.ownerEmail}>\n` +
+        `Plan:     ${planLabel[input.stripePlan] ?? input.stripePlan} · ${input.stripeInterval}\n` +
+        `Gym ID:   ${gymId}\n` +
+        `Session:  ${input.stripeSessionId}\n` +
+        `Customer: ${input.stripeCustomerId ?? "—"}\n` +
+        `Sub:      ${input.stripeSubscriptionId ?? "—"}\n\n` +
+        `Admin: ${CANONICAL_URL}/admin/signups`,
+    });
+    if (result.ok) {
+      console.log(`[provision/email] Admin notification to ${ADMIN_EMAIL}: status=${result.status} providerId=${result.providerId ?? "n/a"}`);
+      return result.status;
+    }
+    console.error(`[provision/email] Resend REJECTED admin notification: ${result.error}`);
+    return "failed";
+  } catch (err) {
+    console.error(`[provision/email] Admin notification threw unexpectedly:`, err);
+    return "failed";
+  }
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -383,9 +405,8 @@ export async function provisionPlatformGym(input: ProvisionInput): Promise<Provi
       console.log(`[provision] Step 2: already provisioned gymId=${existingOwnership.gym_id} — re-sending welcome email`);
       const magicLink = await generateMagicLink(supabase, input.ownerEmail);
       console.log(`[provision] Magic link for re-send: ${magicLink ? "generated" : "FAILED — using /login fallback"}`);
-      await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`).catch((e) =>
-        console.error("[provision] Re-send welcome email FAILED:", e),
-      );
+      const resendResult = await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`);
+      console.log(`[provision] Step 2: re-send welcome email result = ${resendResult}`);
       return { ok: true, gymId: existingOwnership.gym_id as string, userId, alreadyProvisioned: true };
     }
     console.log(`[provision] Step 2: no existing gym — proceeding with full provisioning`);
@@ -444,16 +465,12 @@ export async function provisionPlatformGym(input: ProvisionInput): Promise<Provi
 
   // Always send the welcome email — fallback to /login if magic link is unavailable.
   console.log(`[provision] Step 6: sending welcome email to ${input.ownerEmail}`);
-  const emailResult = await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`)
-    .then(() => "sent")
-    .catch((err) => { console.error("[provision] Step 6 welcome email FAILED:", err); return "failed"; });
+  const emailResult = await sendWelcomeEmail(input, magicLink ?? `${CANONICAL_URL}/login`);
   console.log(`[provision] Step 6: welcome email result = ${emailResult}`);
 
   // 7. Admin notification ─────────────────────────────────────────────────────
   console.log(`[provision] Step 7: sending admin notification to ${ADMIN_EMAIL}`);
-  const adminResult = await sendAdminNotification(input, gymId)
-    .then(() => "sent")
-    .catch((err) => { console.error("[provision] Step 7 admin notification FAILED:", err); return "failed"; });
+  const adminResult = await sendAdminNotification(input, gymId);
   console.log(`[provision] Step 7: admin notification result = ${adminResult}`);
 
   console.log(`[provision] DONE — "${input.gymName}" (${gymId}) provisioned for ${input.ownerEmail}. email=${emailResult}`);

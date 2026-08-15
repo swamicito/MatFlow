@@ -33,9 +33,26 @@ export type SendSmsInput = {
 // Email — Now using official Resend SDK
 // ─────────────────────────────────────────────────────────────
 
+// RESEND_FROM_ADDRESS may be a bare email ("hello@mat-flow.net") or a full
+// header ("MatFlow <hello@mat-flow.net>"). Normalize to the bare email so the
+// fromName wrap below never produces a malformed nested header like
+// "MatFlow <MatFlow <hello@mat-flow.net>>" — Resend rejects those at API
+// validation and the message never even appears in the Resend dashboard.
+function resolveFromEmail(): string {
+  const raw = process.env.RESEND_FROM_ADDRESS ?? "onboarding@resend.dev";
+  const match = raw.match(/<([^>]+)>/);
+  return (match ? match[1] : raw).trim();
+}
+
+function buildFromHeader(fromName?: string): string {
+  const email = resolveFromEmail();
+  const name = fromName?.trim();
+  return name ? `${name} <${email}>` : email;
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_ADDRESS ?? "MatFlow <onboarding@resend.dev>";
+  const from = buildFromHeader(input.fromName);
 
   // Fallback to simulated mode if no API key
   if (!apiKey) {
@@ -46,7 +63,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendResult> {
   try {
     const resend = new Resend(apiKey);
     const { data, error } = await resend.emails.send({
-      from: input.fromName ? `${input.fromName} <${from}>` : from,
+      from,
       to: [input.to],
       subject: input.subject,
       text: input.body,
