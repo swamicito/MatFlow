@@ -120,6 +120,11 @@ export async function POST(req: NextRequest) {
 
         const purchaseType = session.metadata?.matflow_purchase_type;
 
+        console.log(
+          `[webhook] checkout.session.completed received: session=${session.id} ` +
+          `purchaseType=${purchaseType ?? "none"} email=${session.metadata?.owner_email ?? session.customer_email ?? "unknown"}`,
+        );
+
         if (purchaseType === "platform_subscription") {
           // New gym owner signed up — auto-provision their workspace.
           const subId =
@@ -131,10 +136,25 @@ export async function POST(req: NextRequest) {
               ? session.customer
               : (session.customer?.id ?? null);
 
+          const ownerEmail = session.metadata?.owner_email ?? session.customer_email ?? "";
+
+          if (!ownerEmail) {
+            console.error(
+              `[webhook] Platform subscription session=${session.id} has no owner email ` +
+              `(metadata.owner_email and customer_email both empty) — cannot provision. Not retrying.`,
+            );
+            break;
+          }
+
+          console.log(
+            `[webhook] Platform subscription detected — calling provisionPlatformGym for ` +
+            `"${session.metadata?.gym_name ?? "New Gym"}" <${ownerEmail}> (session=${session.id})`,
+          );
+
           const result = await provisionPlatformGym({
             gymName:              session.metadata?.gym_name    ?? "New Gym",
             ownerName:            session.metadata?.owner_name  ?? "",
-            ownerEmail:           session.metadata?.owner_email ?? session.customer_email ?? "",
+            ownerEmail,
             stripeSessionId:      session.id,
             stripePlan:           session.metadata?.matflow_plan     ?? "",
             stripeInterval:       session.metadata?.matflow_interval ?? "",
@@ -143,13 +163,16 @@ export async function POST(req: NextRequest) {
           });
 
           if (!result.ok) {
-            console.error("[webhook] provisionPlatformGym failed:", result.error);
-            // Return 500 so Stripe retries — provisioning is idempotent.
+            console.error(
+              `[webhook] provisionPlatformGym FAILED for session=${session.id}: ${result.error} ` +
+              `— returning 500 so Stripe retries (provisioning is idempotent).`,
+            );
             return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
           }
 
           console.log(
-            `[webhook] Platform gym provisioned: ${result.gymId} (already=${result.alreadyProvisioned})`,
+            `[webhook] provisionPlatformGym SUCCESS: gymId=${result.gymId} ` +
+            `alreadyProvisioned=${result.alreadyProvisioned} (session=${session.id})`,
           );
         } else if (purchaseType === "instructional") {
           await fulfillInstructionalCheckout(session.id, piId);
