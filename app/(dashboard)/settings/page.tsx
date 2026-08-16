@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Building2,
+  CreditCard,
   Database,
   FileSignature,
   FileSpreadsheet,
@@ -35,6 +36,16 @@ type Tile = {
 };
 
 const TILES: Tile[] = [
+  {
+    href: "/settings/connect",
+    title: "Payments",
+    description:
+      "Connect your Stripe account to accept membership payments from students. Payouts go directly to your bank.",
+    icon: CreditCard,
+    cta: "Connect Stripe",
+    requires: "edit_billing",
+    highlight: true,
+  },
   {
     href: "/settings/branding",
     title: "Custom Branding",

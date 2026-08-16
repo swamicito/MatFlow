@@ -564,6 +564,11 @@ export type Database = {
           secondary_color: string
           accent_color: string
           slug: string
+          stripe_account_id: string | null
+          stripe_charges_enabled: boolean
+          stripe_connected_at: string | null
+          stripe_details_submitted: boolean
+          stripe_payouts_enabled: boolean
           timezone: string
           webhook_last_test_at: string | null
         }
@@ -585,6 +590,11 @@ export type Database = {
           secondary_color?: string
           accent_color?: string
           slug: string
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
+          stripe_connected_at?: string | null
+          stripe_details_submitted?: boolean
+          stripe_payouts_enabled?: boolean
           timezone?: string
           webhook_last_test_at?: string | null
         }
@@ -606,6 +616,11 @@ export type Database = {
           secondary_color?: string
           accent_color?: string
           slug?: string
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
+          stripe_connected_at?: string | null
+          stripe_details_submitted?: boolean
+          stripe_payouts_enabled?: boolean
           timezone?: string
           webhook_last_test_at?: string | null
         }
