@@ -58,7 +58,7 @@ export function Navbar() {
             Log in
           </Link>
           <Link
-            href="/login"
+            href="/pricing"
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-white text-black text-sm font-semibold hover:bg-white/90 transition-colors"
           >
             Get Started
@@ -109,7 +109,7 @@ export function Navbar() {
               Log in
             </Link>
             <Link
-              href="/login"
+              href="/pricing"
               className="text-sm text-center font-semibold bg-white text-black rounded-xl py-3 hover:bg-white/90 transition-colors"
               onClick={() => setOpen(false)}
             >

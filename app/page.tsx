@@ -230,7 +230,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
             <Link
-              href="/login"
+              href="/pricing"
               className="inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-[0.98] transition-all"
             >
               Start Free Trial
@@ -355,7 +355,7 @@ export default function LandingPage() {
             clean, automated system your students will love.
           </p>
           <Link
-            href="/login"
+            href="/pricing"
             className="inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-all"
           >
             Start Free Trial
@@ -524,7 +524,7 @@ export default function LandingPage() {
             Your first schedule embed is live in minutes.
           </p>
           <Link
-            href="/login"
+            href="/pricing"
             className="inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-[0.98] transition-all"
           >
             Start Free Trial — It&apos;s Free
