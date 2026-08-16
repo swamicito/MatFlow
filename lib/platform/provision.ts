@@ -193,58 +193,72 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
     "Start collecting memberships and running your gym from one place.",
   ];
 
+  // logo-full.png is 1522×293 (≈5.2:1) with the black background baked in.
+  // Every container behind it is explicitly #000000 so it blends seamlessly,
+  // and width/height are set to the true aspect ratio so no client distorts it.
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
   <title>Your MatFlow workspace is ready</title>
+  <style>
+    @media only screen and (max-width: 600px) {
+      .container { padding: 32px 16px 48px !important; }
+      .card-pad  { padding-left: 24px !important; padding-right: 24px !important; }
+      .headline  { font-size: 22px !important; }
+      .cta-btn   { display: block !important; text-align: center !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#000000;">
 
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#000000;min-height:100vh;">
-<tr><td align="center" style="padding:48px 20px 64px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#000000" style="background-color:#000000;">
+<tr><td align="center" bgcolor="#000000" class="container" style="background-color:#000000;padding:56px 24px 64px;">
 
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
 
-    <!-- Logo -->
-    <tr><td align="center" style="padding-bottom:36px;">
+    <!-- Logo (centered, true aspect ratio 1522:293) -->
+    <tr><td align="center" bgcolor="#000000" style="background-color:#000000;padding-bottom:40px;">
       <a href="${CANONICAL_URL}" style="text-decoration:none;">
         <img src="${CANONICAL_URL}/logo-full.png"
              alt="MatFlow"
-             width="140"
-             style="display:block;height:auto;border:0;max-width:140px;" />
+             width="180"
+             height="35"
+             style="display:block;border:0;outline:none;width:180px;height:35px;" />
       </a>
     </td></tr>
 
     <!-- Card -->
-    <tr><td style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:16px;overflow:hidden;">
+    <tr><td bgcolor="#0a0a0a" style="background-color:#0a0a0a;border:1px solid #1f1f1f;border-radius:16px;">
 
-      <!-- Card body -->
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
         <!-- Headline -->
-        <tr><td style="padding:40px 40px 8px;">
-          <h1 style="margin:0;font-size:24px;font-weight:700;line-height:1.25;color:#ffffff;letter-spacing:-0.3px;">
+        <tr><td align="center" class="card-pad" style="padding:44px 36px 0;">
+          <h1 class="headline" style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:24px;font-weight:700;line-height:1.3;color:#ffffff;letter-spacing:-0.3px;">
             Your workspace is ready${firstName !== "there" ? `, ${firstName}` : ""}!
           </h1>
         </td></tr>
 
         <!-- Subtext -->
-        <tr><td style="padding:12px 40px 32px;">
-          <p style="margin:0;font-size:15px;line-height:1.6;color:#9CA3AF;">
+        <tr><td align="center" class="card-pad" style="padding:16px 36px 36px;">
+          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#9CA3AF;">
             <strong style="color:#ffffff;font-weight:600;">${input.gymName}</strong> is live on MatFlow.
-            Click below to log&nbsp;in — no password needed.
+            Tap below to log&nbsp;in — no password needed.
           </p>
         </td></tr>
 
-        <!-- CTA button -->
-        <tr><td align="left" style="padding:0 40px 36px;">
-          <table cellpadding="0" cellspacing="0" border="0">
+        <!-- CTA button (centered; full-width on mobile via media query) -->
+        <tr><td align="center" class="card-pad" style="padding:0 36px 40px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
             <tr>
-              <td style="background:#ffffff;border-radius:10px;">
+              <td align="center" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:10px;">
                 <a href="${magicLink}"
-                   style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#000000;text-decoration:none;white-space:nowrap;letter-spacing:-0.1px;">
+                   class="cta-btn"
+                   style="display:inline-block;padding:16px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#000000;text-decoration:none;letter-spacing:-0.1px;">
                   Log in to MatFlow &rarr;
                 </a>
               </td>
@@ -253,44 +267,36 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
         </td></tr>
 
         <!-- Divider -->
-        <tr><td style="padding:0 40px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="border-top:1px solid #1a1a1a;font-size:0;">&nbsp;</td></tr>
+        <tr><td class="card-pad" style="padding:0 36px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="border-top:1px solid #1a1a1a;font-size:0;line-height:0;">&nbsp;</td></tr>
           </table>
         </td></tr>
 
         <!-- What happens next -->
-        <tr><td style="padding:28px 40px 8px;">
-          <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#4B5563;">
+        <tr><td class="card-pad" style="padding:32px 36px 8px;">
+          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6B7280;">
             What happens next
           </p>
         </td></tr>
 
-        <tr><td style="padding:12px 40px 32px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td class="card-pad" style="padding:16px 36px 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             ${steps.map((step, i) => `
             <tr>
-              <td width="28" valign="top" style="padding:2px 12px 12px 0;">
-                <span style="display:inline-block;width:20px;height:20px;background:#052e16;border:1px solid #14532d;border-radius:50%;font-size:10px;font-weight:700;color:#4ade80;text-align:center;line-height:20px;">${i + 1}</span>
+              <td width="32" valign="top" style="padding:3px 12px 14px 0;">
+                <span style="display:inline-block;width:22px;height:22px;background-color:#052e16;border:1px solid #14532d;border-radius:50%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;color:#4ade80;text-align:center;line-height:22px;">${i + 1}</span>
               </td>
-              <td style="padding:2px 0 12px;font-size:13px;line-height:1.6;color:#9CA3AF;">${step}</td>
+              <td style="padding:2px 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#9CA3AF;">${step}</td>
             </tr>`).join("")}
           </table>
         </td></tr>
 
         <!-- Link expiry note -->
-        <tr><td style="padding:0 40px 36px;">
-          <p style="margin:0;font-size:12px;line-height:1.5;color:#4B5563;">
+        <tr><td align="center" class="card-pad" style="padding:0 36px 36px;">
+          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6B7280;">
             This link expires in 24&nbsp;hours. After that, you can
-            <a href="${CANONICAL_URL}/login" style="color:#6B7280;text-decoration:underline;">request a new one</a>.
-          </p>
-        </td></tr>
-
-        <!-- Footer -->
-        <tr><td style="padding:20px 40px;border-top:1px solid #1a1a1a;">
-          <p style="margin:0;font-size:12px;line-height:1.5;color:#4B5563;">
-            Questions? Email us at
-            <a href="mailto:support@mat-flow.net" style="color:#6B7280;text-decoration:underline;">support@mat-flow.net</a>
+            <a href="${CANONICAL_URL}/login" style="color:#9CA3AF;text-decoration:underline;">request a new one</a>.
           </p>
         </td></tr>
 
@@ -298,9 +304,13 @@ function welcomeHtml(input: ProvisionInput, magicLink: string): string {
     </td></tr>
     <!-- / Card -->
 
-    <!-- Bottom wordmark -->
-    <tr><td align="center" style="padding-top:32px;">
-      <p style="margin:0;font-size:11px;color:#333333;letter-spacing:0.08em;">
+    <!-- Footer -->
+    <tr><td align="center" bgcolor="#000000" style="background-color:#000000;padding-top:32px;">
+      <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6B7280;">
+        Questions? Email us at
+        <a href="mailto:support@mat-flow.net" style="color:#9CA3AF;text-decoration:underline;">support@mat-flow.net</a>
+      </p>
+      <p style="margin:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;color:#3f3f46;letter-spacing:0.08em;">
         MATFLOW &mdash; Gym Management Software
       </p>
     </td></tr>
