@@ -24,6 +24,7 @@ import {
   INTERVAL_SHORT,
   MEMBERSHIP_STATUS_BADGE,
   MEMBERSHIP_STATUS_LABEL,
+  displayMembershipStatus,
   formatMoney,
 } from "@/lib/billing";
 import {
@@ -293,7 +294,7 @@ function SubscriptionRow({
         )}
       </TableCell>
       <TableCell>
-        <StatusBadge status={row.status} />
+        <StatusBadge status={row.status} effectivePriceCents={row.effective_price_cents} />
         {row.cancel_at_period_end && (
           <span className="ml-2 text-xs text-amber-300">cancels at period end</span>
         )}
@@ -333,15 +334,22 @@ function SubscriptionRow({
   );
 }
 
-function StatusBadge({ status }: { status: MembershipStatus }) {
+function StatusBadge({
+  status,
+  effectivePriceCents,
+}: {
+  status: MembershipStatus;
+  effectivePriceCents?: number | null;
+}) {
+  const display = displayMembershipStatus(status, effectivePriceCents);
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        MEMBERSHIP_STATUS_BADGE[status],
+        MEMBERSHIP_STATUS_BADGE[display],
       )}
     >
-      {MEMBERSHIP_STATUS_LABEL[status]}
+      {MEMBERSHIP_STATUS_LABEL[display]}
     </span>
   );
 }

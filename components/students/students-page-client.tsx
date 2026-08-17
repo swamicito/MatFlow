@@ -31,6 +31,7 @@ import {
 import {
   MEMBERSHIP_STATUS_BADGE,
   MEMBERSHIP_STATUS_LABEL,
+  displayMembershipStatus,
 } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import type { Database, StudentStatus } from "@/lib/supabase/types";
@@ -290,16 +291,22 @@ export function StudentsPageClient({
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col items-start gap-1">
-                          {membershipByStudent[s.id] ? (
-                            <span
-                              className={cn(
-                                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                                MEMBERSHIP_STATUS_BADGE[membershipByStudent[s.id].status],
-                              )}
-                            >
-                              {MEMBERSHIP_STATUS_LABEL[membershipByStudent[s.id].status]}
-                            </span>
-                          ) : (
+                          {membershipByStudent[s.id] ? (() => {
+                            const m = membershipByStudent[s.id];
+                            const plan = plans.find((p) => p.id === m.plan_id);
+                            const effectiveCents = m.custom_price_cents ?? plan?.price_cents ?? 0;
+                            const display = displayMembershipStatus(m.status, effectiveCents);
+                            return (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                                  MEMBERSHIP_STATUS_BADGE[display],
+                                )}
+                              >
+                                {MEMBERSHIP_STATUS_LABEL[display]}
+                              </span>
+                            );
+                          })() : (
                             <span className="inline-flex items-center rounded-full border border-[#333] bg-[#111] px-2.5 py-0.5 text-xs font-medium text-[#888]">
                               No plan
                             </span>

@@ -78,6 +78,7 @@ import {
   INTERVAL_SHORT,
   MEMBERSHIP_STATUS_BADGE,
   MEMBERSHIP_STATUS_LABEL,
+  displayMembershipStatus,
   formatMoney,
 } from "@/lib/billing";
 import { cn } from "@/lib/utils";
@@ -637,10 +638,10 @@ function BillingSection({
             <span
               className={cn(
                 "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                MEMBERSHIP_STATUS_BADGE[membership.status],
+                MEMBERSHIP_STATUS_BADGE[displayMembershipStatus(membership.status, effective)],
               )}
             >
-              {MEMBERSHIP_STATUS_LABEL[membership.status]}
+              {MEMBERSHIP_STATUS_LABEL[displayMembershipStatus(membership.status, effective)]}
             </span>
           </div>
 

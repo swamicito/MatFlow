@@ -78,3 +78,18 @@ export function toMonthlyCents(
 export function isRevenueStatus(s: MembershipStatus): boolean {
   return s === "active" || s === "trialing";
 }
+
+/**
+ * Display-time status correction for legacy data: memberships created before
+ * the Trial/Pending logic may be stored as 'active' on a $0 plan. Show those
+ * as 'trialing' (Trial). Purely presentational — does not mutate the DB.
+ */
+export function displayMembershipStatus(
+  status: MembershipStatus,
+  effectivePriceCents: number | null | undefined,
+): MembershipStatus {
+  if (status === "active" && (effectivePriceCents ?? 0) === 0) {
+    return "trialing";
+  }
+  return status;
+}
