@@ -22,7 +22,7 @@ export default async function StudentsPage() {
     await Promise.all([
       supabase.from("students").select("*").eq("gym_id", gymId).order("created_at", { ascending: false }),
       supabase.from("belt_progress").select("*").in("student_id", studentIds),
-      supabase.from("memberships").select("*").in("student_id", studentIds).in("status", ["active", "trialing", "past_due", "paused"]),
+      supabase.from("memberships").select("*").in("student_id", studentIds).in("status", ["active", "trialing", "past_due", "paused", "pending"]),
       supabase.from("membership_plans").select("*").eq("gym_id", gymId).order("price_cents", { ascending: true }),
       supabase.from("family_accounts").select("*").eq("gym_id", gymId).order("parent_name", { ascending: true }),
       supabase.from("waivers").select("*").in("student_id", studentIds).order("signed_at", { ascending: false }),

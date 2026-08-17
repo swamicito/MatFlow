@@ -217,7 +217,7 @@ export async function subscribeStudent(input: any): Promise<ActionResult> {
     .from("memberships")
     .select("id, status")
     .eq("student_id", student.id)
-    .in("status", ["active", "trialing", "past_due"])
+    .in("status", ["active", "trialing", "past_due", "pending"])
     .maybeSingle();
   if (existing) {
     return {
@@ -226,7 +226,31 @@ export async function subscribeStudent(input: any): Promise<ActionResult> {
     };
   }
 
+  const effectiveCents = customCents ?? plan.price_cents;
+
   try {
+    // ── Free / $0 plan: no Stripe subscription at all ────────────────────────
+    // Nothing to collect, so the membership is a Trial rather than Active.
+    if (effectiveCents === 0) {
+      const { error: insErr } = await supabase.from("memberships").insert({
+        student_id: student.id,
+        plan_id: plan.id,
+        custom_price_cents: customCents,
+        stripe_subscription_id: null,
+        stripe_price_id: null,
+        status: "trialing",
+        start_date: new Date().toISOString().slice(0, 10),
+        current_period_end: null,
+        cancel_at_period_end: false,
+      });
+      if (insErr) return { ok: false, error: `Failed to save membership: ${insErr.message}` };
+
+      revalidatePath("/billing");
+      revalidatePath("/students");
+      return { ok: true };
+    }
+
+    // ── Paid plan: subscription on the connected account ─────────────────────
     const customerId = await ensureConnectedCustomer(stripe, gym, student);
     const priceId = await ensureConnectedPrice(stripe, gym, plan, customCents);
 
@@ -237,6 +261,7 @@ export async function subscribeStudent(input: any): Promise<ActionResult> {
         items: [{ price: priceId }],
         collection_method: "send_invoice",
         days_until_due: 7,
+        expand: ["latest_invoice"],
         ...(isCalendar
           ? {
               billing_cycle_anchor: nextCalendarAnchor(gym),
@@ -254,13 +279,20 @@ export async function subscribeStudent(input: any): Promise<ActionResult> {
 
     const periodEndUnix = (subscription as any).items?.data?.[0]?.current_period_end ?? null;
 
+    // With collection_method=send_invoice, Stripe marks the subscription
+    // "active" immediately even though the first invoice is unpaid. Trust the
+    // invoice, not the subscription status: only mark Active once the first
+    // invoice is actually paid (otherwise invoice.paid will flip it later).
+    const latestInvoice = subscription.latest_invoice as { status?: string } | null;
+    const firstInvoicePaid = latestInvoice?.status === "paid";
+
     const { error: insErr } = await supabase.from("memberships").insert({
       student_id: student.id,
       plan_id: plan.id,
       custom_price_cents: customCents,
       stripe_subscription_id: subscription.id,
       stripe_price_id: priceId,
-      status: stripeStatusToDb(subscription.status),
+      status: firstInvoicePaid ? "active" : "pending",
       start_date: new Date().toISOString().slice(0, 10),
       current_period_end: periodEndUnix
         ? new Date(periodEndUnix * 1000).toISOString()

@@ -492,7 +492,7 @@ export async function runImport(req: ImportRequest): Promise<ImportResult> {
           .from("memberships")
           .select("id")
           .eq("student_id", studentId)
-          .in("status", ["active", "trialing", "past_due", "paused"])
+          .in("status", ["active", "trialing", "past_due", "paused", "pending"])
           .maybeSingle();
 
         if (!existingMem) {

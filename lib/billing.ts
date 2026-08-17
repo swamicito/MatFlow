@@ -26,7 +26,8 @@ export const INTERVAL_SHORT: Record<MembershipInterval, string> = {
 
 export const MEMBERSHIP_STATUS_LABEL: Record<MembershipStatus, string> = {
   active: "Active",
-  trialing: "Trialing",
+  trialing: "Trial",
+  pending: "Pending",
   past_due: "Past Due",
   canceled: "Canceled",
   paused: "Paused",
@@ -35,6 +36,7 @@ export const MEMBERSHIP_STATUS_LABEL: Record<MembershipStatus, string> = {
 export const MEMBERSHIP_STATUS_BADGE: Record<MembershipStatus, string> = {
   active: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
   trialing: "border-blue-500/40 bg-blue-500/10 text-blue-300",
+  pending: "border-yellow-500/40 bg-yellow-500/10 text-yellow-300",
   past_due: "border-red-500/40 bg-red-500/10 text-red-300",
   canceled: "border-[#333] bg-[#111] text-[#888]",
   paused: "border-amber-500/40 bg-amber-500/10 text-amber-300",

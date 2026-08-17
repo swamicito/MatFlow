@@ -78,7 +78,7 @@ export default async function BillingPage() {
     );
 
   const active = enriched.filter(
-    (m) => m.status === "active" || m.status === "trialing" || m.status === "paused",
+    (m) => m.status === "active" || m.status === "trialing" || m.status === "paused" || m.status === "pending",
   );
   const pastDue = enriched.filter((m) => m.status === "past_due");
 

@@ -1467,6 +1467,7 @@ export type Database = {
         | "canceled"
         | "trialing"
         | "paused"
+        | "pending"
       student_status: "active" | "paused" | "cancelled" | "trial"
       user_role: "owner" | "admin" | "instructor" | "front_desk"
     }
@@ -2084,6 +2085,7 @@ export const Constants = {
         "canceled",
         "trialing",
         "paused",
+        "pending",
       ],
       student_status: ["active", "paused", "cancelled", "trial"],
       user_role: ["owner", "admin", "instructor", "front_desk"],

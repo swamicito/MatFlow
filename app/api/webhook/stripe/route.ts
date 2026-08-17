@@ -15,32 +15,64 @@ const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 async function applySubscriptionUpdate(sub: Stripe.Subscription) {
   const supabase = createAdminClient() as any;
   const periodEndUnix = sub.items.data[0]?.current_period_end;
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id, status")
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+  if (!membership) return;
+
+  let status = stripeStatusToDb(sub.status);
+
+  // With collection_method=send_invoice, Stripe reports the subscription as
+  // "active" from creation even though the first invoice is unpaid. Only
+  // invoice.paid may move a pending membership to active — don't let a bare
+  // subscription update do it.
+  if (membership.status === "pending" && status === "active") {
+    status = "pending";
+  }
+
   await supabase
     .from("memberships")
     .update({
-      status: stripeStatusToDb(sub.status),
+      status,
       current_period_end: periodEndUnix
         ? new Date(periodEndUnix * 1000).toISOString()
         : null,
       cancel_at_period_end: sub.cancel_at_period_end ?? false,
     })
-    .eq("stripe_subscription_id", sub.id);
+    .eq("id", membership.id);
 }
 
 async function applyInvoicePaid(invoice: Stripe.Invoice) {
   const subId = (invoice as unknown as { subscription?: string }).subscription;
   if (!subId) return;
   const supabase = createAdminClient() as any;
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id, status")
+    .eq("stripe_subscription_id", subId)
+    .maybeSingle();
+  if (!membership) return;
+
+  // A paid invoice settles any money owed: pending (first payment) and
+  // past_due (failed renewal) both become active. Exception: a $0 invoice
+  // during a real Stripe trial must not end the trial early.
+  const keepTrial =
+    membership.status === "trialing" && (invoice.amount_paid ?? 0) === 0;
+
   const periodEndUnix = invoice.lines.data[0]?.period?.end;
   await supabase
     .from("memberships")
     .update({
-      status: "active",
+      status: keepTrial ? "trialing" : "active",
       current_period_end: periodEndUnix
         ? new Date(periodEndUnix * 1000).toISOString()
         : null,
     })
-    .eq("stripe_subscription_id", subId);
+    .eq("id", membership.id);
 }
 
 async function applyInvoiceFailed(invoice: Stripe.Invoice) {

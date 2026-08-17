@@ -654,7 +654,9 @@ function BillingSection({
                 ? "Ends"
                 : membership.status === "trialing"
                   ? "Trial ends"
-                  : "Renews";
+                  : membership.status === "pending"
+                    ? "First invoice due"
+                    : "Renews";
             return (
               <p className="text-xs text-[#666]">
                 {verb}{" "}

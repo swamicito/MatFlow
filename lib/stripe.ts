@@ -72,9 +72,10 @@ export function stripeStatusToDb(
       return "trialing";
     case "paused":
       return "paused";
+    case "incomplete":
+      return "pending";
     case "past_due":
     case "unpaid":
-    case "incomplete":
       return "past_due";
     case "canceled":
     case "incomplete_expired":
