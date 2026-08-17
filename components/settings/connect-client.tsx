@@ -14,6 +14,7 @@ import {
   startStripeConnect,
   syncConnectStatus,
   createExpressDashboardLink,
+  setBillingCadence,
   type ConnectState,
 } from "@/app/(dashboard)/settings/connect/actions";
 
@@ -87,10 +88,35 @@ export function ConnectClient({
     });
   }
 
+  const [cadence, setCadence] = useState<"anniversary" | "calendar">(
+    initialState?.billingCadence ?? "anniversary",
+  );
+  const [anchorDay, setAnchorDay] = useState<number>(
+    initialState?.billingAnchorDay ?? 1,
+  );
+  const [cadenceSaved, setCadenceSaved] = useState(false);
+
+  function handleSaveCadence() {
+    setError(null);
+    setCadenceSaved(false);
+    startTransition(async () => {
+      const res = await setBillingCadence({ cadence, anchorDay });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setCadenceSaved(true);
+      setState((s) =>
+        s ? { ...s, billingCadence: cadence, billingAnchorDay: anchorDay } : s,
+      );
+    });
+  }
+
   const status = state?.status ?? "not_connected";
   const badge = STATUS_LABEL[status];
 
   return (
+    <>
     <div className="rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] p-6 space-y-5">
       {/* Header row */}
       <div className="flex items-start gap-4">
@@ -224,5 +250,90 @@ export function ConnectClient({
         dashboard at any time.
       </p>
     </div>
+
+    {/* ── Billing cadence (only once ready to charge) ── */}
+    {status === "ready" && (
+      <div className="rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] p-6 space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-white">Billing cadence</h2>
+          <p className="text-sm text-[#aaa]">
+            Choose when student memberships renew each period.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setCadence("anniversary")}
+            className={`rounded-lg border p-4 text-left transition-colors ${
+              cadence === "anniversary"
+                ? "border-white/60 bg-white/5"
+                : "border-[#222] bg-black hover:border-[#333]"
+            }`}
+          >
+            <p className="text-sm font-semibold text-white">Anniversary</p>
+            <p className="text-xs text-[#888] mt-1 leading-relaxed">
+              Each student is billed on the day they joined. Revenue is spread
+              across the month.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCadence("calendar")}
+            className={`rounded-lg border p-4 text-left transition-colors ${
+              cadence === "calendar"
+                ? "border-white/60 bg-white/5"
+                : "border-[#222] bg-black hover:border-[#333]"
+            }`}
+          >
+            <p className="text-sm font-semibold text-white">Calendar</p>
+            <p className="text-xs text-[#888] mt-1 leading-relaxed">
+              Everyone bills on the same day. New students pay a prorated
+              amount first.
+            </p>
+          </button>
+        </div>
+
+        {cadence === "calendar" && (
+          <div className="flex items-center gap-3">
+            <label htmlFor="anchor-day" className="text-sm text-[#ccc] shrink-0">
+              Bill on day
+            </label>
+            <select
+              id="anchor-day"
+              value={anchorDay}
+              onChange={(e) => setAnchorDay(Number(e.target.value))}
+              className="h-9 rounded-md border border-[#222] bg-black px-3 text-sm text-white"
+            >
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                  {d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th"} of the month
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSaveCadence}
+            disabled={
+              pending ||
+              (cadence === state?.billingCadence &&
+                anchorDay === state?.billingAnchorDay)
+            }
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-white text-black text-sm font-semibold hover:bg-white/90 transition-colors disabled:opacity-40"
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Save cadence
+          </button>
+          {cadenceSaved && (
+            <span className="text-xs text-emerald-400">Saved</span>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }

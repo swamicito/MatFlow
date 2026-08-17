@@ -1,6 +1,7 @@
 "use server";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
 import { requirePermission } from "@/lib/auth/current-role";
@@ -21,6 +22,8 @@ export type ConnectState = {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   connectedAt: string | null;
+  billingCadence: "anniversary" | "calendar";
+  billingAnchorDay: number;
 };
 
 export type ActionResult<T = undefined> =
@@ -74,7 +77,7 @@ export async function getConnectState(): Promise<ConnectState | null> {
   const { data: gym } = await supabase
     .from("gyms")
     .select(
-      "stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at",
+      "stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at, billing_cadence, billing_anchor_day",
     )
     .eq("id", gymId)
     .maybeSingle();
@@ -96,6 +99,8 @@ export async function getConnectState(): Promise<ConnectState | null> {
     payoutsEnabled:   gym.stripe_payouts_enabled ?? false,
     detailsSubmitted: gym.stripe_details_submitted ?? false,
     connectedAt:      gym.stripe_connected_at ?? null,
+    billingCadence:   gym.billing_cadence === "calendar" ? "calendar" : "anniversary",
+    billingAnchorDay: gym.billing_anchor_day ?? 1,
   };
 }
 
@@ -189,7 +194,7 @@ export async function syncConnectStatus(): Promise<ActionResult<ConnectState>> {
   const supabase = createAdminClient() as any;
   const { data: gym } = await supabase
     .from("gyms")
-    .select("stripe_account_id")
+    .select("stripe_account_id, billing_cadence, billing_anchor_day")
     .eq("id", gymId)
     .maybeSingle();
 
@@ -200,6 +205,7 @@ export async function syncConnectStatus(): Promise<ActionResult<ConnectState>> {
         accountId: null, status: "not_connected",
         chargesEnabled: false, payoutsEnabled: false,
         detailsSubmitted: false, connectedAt: null,
+        billingCadence: "anniversary", billingAnchorDay: 1,
       },
     };
   }
@@ -218,6 +224,8 @@ export async function syncConnectStatus(): Promise<ActionResult<ConnectState>> {
         payoutsEnabled:   acct.payouts_enabled ?? false,
         detailsSubmitted: acct.details_submitted ?? false,
         connectedAt:      new Date().toISOString(),
+        billingCadence:   gym.billing_cadence === "calendar" ? "calendar" : "anniversary",
+        billingAnchorDay: gym.billing_anchor_day ?? 1,
       },
     };
   } catch (e) {
@@ -260,4 +268,50 @@ export async function createExpressDashboardLink(): Promise<ActionResult<{ url: 
       error: e instanceof Error ? e.message : "Failed to create dashboard link.",
     };
   }
+}
+
+// ─────────────────── Billing cadence ───────────────────
+// Anniversary: each student bills on their join date.
+// Calendar:    everyone bills on the same day of month (first invoice prorated).
+
+export async function setBillingCadence(input: {
+  cadence: "anniversary" | "calendar";
+  anchorDay?: number;
+}): Promise<ActionResult> {
+  const perm = await requirePermission("edit_billing");
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const gymId = await getCurrentGymId();
+  if (!gymId) return { ok: false, error: "No active gym." };
+
+  if (input.cadence !== "anniversary" && input.cadence !== "calendar") {
+    return { ok: false, error: "Invalid cadence." };
+  }
+  const anchorDay =
+    input.cadence === "calendar" ? Math.round(input.anchorDay ?? 1) : 1;
+  if (anchorDay < 1 || anchorDay > 28) {
+    return { ok: false, error: "Billing day must be between 1 and 28." };
+  }
+
+  const supabase = createAdminClient() as any;
+  const { data: gym } = await supabase
+    .from("gyms")
+    .select("stripe_charges_enabled")
+    .eq("id", gymId)
+    .maybeSingle();
+
+  if (!gym?.stripe_charges_enabled) {
+    return { ok: false, error: "Connect Stripe and get approved for charges first." };
+  }
+
+  const { error } = await supabase
+    .from("gyms")
+    .update({ billing_cadence: input.cadence, billing_anchor_day: anchorDay })
+    .eq("id", gymId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/settings/connect");
+  revalidatePath("/billing");
+  return { ok: true };
 }

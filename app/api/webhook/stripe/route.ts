@@ -211,6 +211,6 @@ export function GET() {
     endpoint: "stripe",
     method: "POST",
     description:
-      "Stripe webhook. Configure at https://dashboard.stripe.com/webhooks pointing to /api/webhook/stripe with events: invoice.paid, invoice.payment_failed, customer.subscription.{created,updated,deleted,paused,resumed}, checkout.session.completed.",
+      "Stripe webhook. Configure at https://dashboard.stripe.com/webhooks pointing to /api/webhook/stripe with events: invoice.paid, invoice.payment_failed, customer.subscription.{created,updated,deleted,paused,resumed}, checkout.session.completed. ALSO register the same URL as a Connect webhook endpoint (dashboard → Connect → webhook endpoints, 'events from connected accounts') so student subscription events on gyms' connected accounts stay in sync.",
   });
 }

@@ -548,6 +548,8 @@ export type Database = {
       gyms: {
         Row: {
           address: string | null
+          billing_anchor_day: number
+          billing_cadence: string
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -574,6 +576,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          billing_anchor_day?: number
+          billing_cadence?: string
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -600,6 +604,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          billing_anchor_day?: number
+          billing_cadence?: string
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
