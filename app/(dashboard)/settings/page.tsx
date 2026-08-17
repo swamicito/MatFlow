@@ -32,7 +32,6 @@ type Tile = {
   icon: typeof SettingsIcon;
   cta: string;
   requires: Permission;
-  highlight?: boolean;
 };
 
 const TILES: Tile[] = [
@@ -44,7 +43,6 @@ const TILES: Tile[] = [
     icon: CreditCard,
     cta: "Connect Stripe",
     requires: "edit_billing",
-    highlight: true,
   },
   {
     href: "/settings/branding",
@@ -63,7 +61,6 @@ const TILES: Tile[] = [
     icon: FileSpreadsheet,
     cta: "Open importer",
     requires: "view_import",
-    highlight: true,
   },
   {
     href: "/billing/plans",
@@ -154,20 +151,35 @@ export default async function SettingsPage() {
 
   let gymCount = 0;
   let activeGym: { name: string; slug: string } | null = null;
+  let recommendedHref: string | null = null;
 
   if (can(role, "edit_settings")) {
     const admin = createAdminClient() as any;
     const activeGymId = await getCurrentGymId();
 
-    const [countRes, gymRes] = await Promise.all([
+    const [countRes, gymRes, studentCountRes] = await Promise.all([
       admin.from("gyms").select("id", { count: "exact", head: true }),
       activeGymId
-        ? admin.from("gyms").select("name, slug").eq("id", activeGymId).maybeSingle()
+        ? admin.from("gyms").select("name, slug, stripe_charges_enabled").eq("id", activeGymId).maybeSingle()
         : Promise.resolve({ data: null }),
+      activeGymId
+        ? admin.from("students").select("id", { count: "exact", head: true }).eq("gym_id", activeGymId)
+        : Promise.resolve({ count: 0 }),
     ]);
 
     gymCount  = countRes.count ?? 0;
     activeGym = gymRes.data ?? null;
+
+    // Exactly one "Recommended first step" badge, in priority order:
+    // 1. Payments — until Stripe is connected and charge-ready.
+    // 2. Import — until the gym has at least a few students.
+    const stripeReady = (gymRes.data as any)?.stripe_charges_enabled === true;
+    const studentCount = studentCountRes.count ?? 0;
+    if (!stripeReady && can(role, "edit_billing")) {
+      recommendedHref = "/settings/connect";
+    } else if (studentCount < 3 && can(role, "view_import")) {
+      recommendedHref = "/settings/import";
+    }
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mat-flow.net";
@@ -254,12 +266,13 @@ export default async function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {tiles.map((t) => {
           const Icon = t.icon;
+          const highlight = t.href === recommendedHref;
           return (
             <Link key={t.href} href={t.href} className="group">
               <Card
                 className={
                   "h-full bg-[#0a0a0a] border-[#1f1f1f] shadow-none transition-colors group-hover:border-[#333] " +
-                  (t.highlight
+                  (highlight
                     ? "ring-1 ring-white/10 group-hover:ring-white/30"
                     : "")
                 }
@@ -269,14 +282,14 @@ export default async function SettingsPage() {
                     <div
                       className={
                         "h-10 w-10 grid place-items-center rounded-md border " +
-                        (t.highlight
+                        (highlight
                           ? "border-white/30 bg-white/5 text-white"
                           : "border-[#222] bg-black text-[#ccc]")
                       }
                     >
                       <Icon className="h-5 w-5" />
                     </div>
-                    {t.highlight && (
+                    {highlight && (
                       <span className="text-[10px] uppercase tracking-widest text-white/80 border border-white/30 rounded-full px-2 py-0.5">
                         Recommended first step
                       </span>

@@ -28,6 +28,10 @@ import {
   STUDENT_STATUS_LABEL,
   formatDate,
 } from "@/lib/students";
+import {
+  MEMBERSHIP_STATUS_BADGE,
+  MEMBERSHIP_STATUS_LABEL,
+} from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import type { Database, StudentStatus } from "@/lib/supabase/types";
 
@@ -285,14 +289,32 @@ export function StudentsPageClient({
                         <BeltBadge belt={belt} stripes={stripes} />
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                            STUDENT_STATUS_BADGE[s.status],
+                        <div className="flex flex-col items-start gap-1">
+                          {membershipByStudent[s.id] ? (
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                                MEMBERSHIP_STATUS_BADGE[membershipByStudent[s.id].status],
+                              )}
+                            >
+                              {MEMBERSHIP_STATUS_LABEL[membershipByStudent[s.id].status]}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-[#333] bg-[#111] px-2.5 py-0.5 text-xs font-medium text-[#888]">
+                              No plan
+                            </span>
                           )}
-                        >
-                          {STUDENT_STATUS_LABEL[s.status]}
-                        </span>
+                          {(s.status === "paused" || s.status === "cancelled") && (
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full border px-2 py-0 text-[10px] font-medium",
+                                STUDENT_STATUS_BADGE[s.status],
+                              )}
+                            >
+                              Roster: {STUDENT_STATUS_LABEL[s.status]}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-[#888]">
                         {formatDate(s.join_date)}
