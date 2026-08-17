@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Check, ChevronDown, Dumbbell, Search, ShieldCheck, Menu, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Dumbbell, LogOut, Search, ShieldCheck, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import type { UserRole } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 import { GymSwitcher, type GymOption } from "@/components/layout/gym-switcher";
 import { navItems } from "@/lib/nav";
+import { signOut } from "@/app/(dashboard)/auth-actions";
 
 const ALL_ROLES: UserRole[] = ["owner", "admin", "instructor", "front_desk"];
 
@@ -34,12 +35,15 @@ export function Topbar({
   gyms,
   activeGymId,
   studentId,
+  userEmail,
 }: {
   role: UserRole;
   gyms: GymOption[];
   activeGymId: string | null;
   /** Non-null when the current staff user also has a linked student record (dual-role). */
   studentId?: string | null;
+  /** Authenticated user's email, shown in the account menu. */
+  userEmail?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -165,6 +169,17 @@ export function Topbar({
             align="end"
             className="bg-[#0a0a0a] border-[#1f1f1f] text-white w-80"
           >
+            {userEmail && (
+              <>
+                <div className="px-2 py-2">
+                  <p className="text-[10px] uppercase tracking-widest text-[#666]">
+                    Signed in as
+                  </p>
+                  <p className="text-sm text-white truncate mt-0.5">{userEmail}</p>
+                </div>
+                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+              </>
+            )}
             <p className="px-2 py-1.5 text-[10px] uppercase tracking-widest text-[#666] font-normal">
               View as · demo role switcher
             </p>
@@ -195,6 +210,14 @@ export function Topbar({
                 </DropdownMenuItem>
               );
             })}
+            <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+            <DropdownMenuItem
+              onClick={() => startTransition(() => signOut())}
+              className="focus:bg-[#111] focus:text-white py-2.5 cursor-pointer text-[#bbb]"
+            >
+              <LogOut className="h-4 w-4 mr-2 text-[#888]" />
+              <span className="text-sm">Sign out</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

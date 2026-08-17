@@ -714,7 +714,11 @@ function BillingSection({
                 onValueChange={(v) => v && setPlanId(v)}
               >
                 <SelectTrigger className="bg-black border-[#222] text-white">
-                  <SelectValue />
+                  <SelectValue placeholder="Select a plan">
+                    {selectedPlan
+                      ? `${selectedPlan.name} · ${formatMoney(selectedPlan.price_cents)}${INTERVAL_SHORT[selectedPlan.interval]}`
+                      : undefined}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#0a0a0a] border-[#1f1f1f] text-white">
                   {plans.map((p) => (
