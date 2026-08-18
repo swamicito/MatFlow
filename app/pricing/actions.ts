@@ -77,7 +77,11 @@ export async function createPlatformCheckoutSession(
           owner_email: info.ownerEmail,
         },
       },
-      payment_method_collection: "if_required",
+      // Require a card even though $0 is due today (trial) — otherwise the
+      // subscription starts with no payment method and there's nothing to
+      // charge when the trial ends. The trial_settings cancel behavior above
+      // is now just a safety net; with a card on file it never triggers.
+      payment_method_collection: "always",
       allow_promotion_codes: true,
       // Redirect to confirmation page — gym is provisioned manually.
       success_url: `${CHECKOUT_BASE_URL}/signup/confirmed?session_id={CHECKOUT_SESSION_ID}`,
