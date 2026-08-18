@@ -28,14 +28,17 @@ const DEMO_TAG = "[DEMO DATA]";
 
 // ─────────────────── Status check ───────────────────
 
-export async function getDemoStatus(): Promise<{
+export async function getDemoStatus(gymId?: string | null): Promise<{
   loaded: boolean;
   studentCount: number;
 }> {
   const supabase = createAdminClient() as any;
+  const resolvedGymId = gymId ?? (await getCurrentGymId());
+  if (!resolvedGymId) return { loaded: false, studentCount: 0 };
   const { count } = await supabase
     .from("students")
     .select("id", { count: "exact", head: true })
+    .eq("gym_id", resolvedGymId) // scope to the ACTIVE gym only — never peek at other gyms
     .ilike("notes", `%${DEMO_TAG}%`);
   return { loaded: (count ?? 0) > 0, studentCount: count ?? 0 };
 }
@@ -413,8 +416,8 @@ export async function loadDemoData(): Promise<DemoActionResult> {
   const gymId = await getCurrentGymId();
   if (!gymId) return { ok: false, error: "No active gym. Complete onboarding first." };
 
-  // Idempotency: if any demo student already exists, bail.
-  const status = await getDemoStatus();
+  // Idempotency: if any demo student already exists IN THIS GYM, bail.
+  const status = await getDemoStatus(gymId);
   if (status.loaded) {
     return {
       ok: false,
@@ -533,7 +536,10 @@ export async function loadDemoData(): Promise<DemoActionResult> {
       },
       { onConflict: "student_id" },
     );
-    if (!bpErr) counts.belt_progress += 1;
+    if (bpErr) {
+      return { ok: false, error: `Belt progress for "${s.full_name}": ${bpErr.message}` };
+    }
+    counts.belt_progress += 1;
 
     // Membership (active) if specified
     if (s.membership_plan) {
@@ -548,7 +554,10 @@ export async function loadDemoData(): Promise<DemoActionResult> {
           current_period_end: isoDaysAgo(-21), // ~3 weeks out
           cancel_at_period_end: false,
         });
-        if (!memErr) counts.memberships += 1;
+        if (memErr) {
+          return { ok: false, error: `Membership for "${s.full_name}": ${memErr.message}` };
+        }
+        counts.memberships += 1;
       }
     }
   }
@@ -565,7 +574,10 @@ export async function loadDemoData(): Promise<DemoActionResult> {
       notes: `${DEMO_TAG} ${l.notes}`,
       created_at: isoDaysAgo(l.days_ago),
     });
-    if (!lErr) counts.leads += 1;
+    if (lErr) {
+      return { ok: false, error: `Lead "${l.name}": ${lErr.message}` };
+    }
+    counts.leads += 1;
   }
 
   revalidatePath("/dashboard");
