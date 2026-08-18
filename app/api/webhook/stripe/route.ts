@@ -6,6 +6,10 @@ import { getStripe, stripeStatusToDb } from "@/lib/stripe";
 import { fulfillCheckoutSession } from "@/app/(dashboard)/settings/sell/actions";
 import { fulfillInstructionalCheckout } from "@/app/(dashboard)/settings/ondemand/actions";
 import { provisionPlatformGym } from "@/lib/platform/provision";
+import {
+  applyPlatformSubscriptionStatus,
+  findGymByPlatformSubscription,
+} from "@/lib/platform/billing";
 
 export const runtime = "nodejs"; // need Node crypto for signature verification
 export const dynamic = "force-dynamic";
@@ -85,6 +89,57 @@ async function applyInvoiceFailed(invoice: Stripe.Invoice) {
     .eq("stripe_subscription_id", subId);
 }
 
+// ─── Platform subscriptions (gym pays MatFlow) ───────────────────────────────
+// Distinguished from gym-student memberships by subscription metadata set at
+// checkout (matflow_purchase_type=platform_subscription) or by matching the
+// gym's stored platform_stripe_subscription_id. Never falls through to the
+// membership handlers when a platform match is found.
+
+function isPlatformSubscription(sub: Stripe.Subscription): boolean {
+  return sub.metadata?.matflow_purchase_type === "platform_subscription";
+}
+
+async function handlePlatformSubscriptionEvent(sub: Stripe.Subscription): Promise<boolean> {
+  const supabase = createAdminClient() as any;
+  const gym = await findGymByPlatformSubscription(supabase, sub.id);
+  if (!gym) {
+    if (isPlatformSubscription(sub)) {
+      console.error(
+        `[platform-billing] platform subscription ${sub.id} has no matching gym — was provisioning completed?`,
+      );
+    }
+    return false; // not a platform sub we track — let membership handlers try
+  }
+
+  const periodEndUnix = sub.items.data[0]?.current_period_end;
+  await applyPlatformSubscriptionStatus(supabase, gym.id, sub.status, periodEndUnix);
+  return true;
+}
+
+async function handlePlatformInvoicePaid(invoice: Stripe.Invoice): Promise<boolean> {
+  const subId = (invoice as unknown as { subscription?: string }).subscription;
+  if (!subId) return false;
+  const supabase = createAdminClient() as any;
+  const gym = await findGymByPlatformSubscription(supabase, subId);
+  if (!gym) return false;
+
+  // A paid invoice settles the platform subscription: past_due/unpaid → active.
+  const periodEndUnix = invoice.lines.data[0]?.period?.end;
+  await applyPlatformSubscriptionStatus(supabase, gym.id, "active", periodEndUnix);
+  return true;
+}
+
+async function handlePlatformInvoiceFailed(invoice: Stripe.Invoice): Promise<boolean> {
+  const subId = (invoice as unknown as { subscription?: string }).subscription;
+  if (!subId) return false;
+  const supabase = createAdminClient() as any;
+  const gym = await findGymByPlatformSubscription(supabase, subId);
+  if (!gym) return false;
+
+  await applyPlatformSubscriptionStatus(supabase, gym.id, "past_due", undefined);
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
   if (!stripe) {
@@ -128,20 +183,29 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       case "invoice.paid":
-      case "invoice.payment_succeeded":
-        await applyInvoicePaid(event.data.object as Stripe.Invoice);
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (await handlePlatformInvoicePaid(invoice)) break;
+        await applyInvoicePaid(invoice);
         break;
+      }
 
-      case "invoice.payment_failed":
-        await applyInvoiceFailed(event.data.object as Stripe.Invoice);
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (await handlePlatformInvoiceFailed(invoice)) break;
+        await applyInvoiceFailed(invoice);
         break;
+      }
 
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.resumed":
-      case "customer.subscription.paused":
-        await applySubscriptionUpdate(event.data.object as Stripe.Subscription);
+      case "customer.subscription.paused": {
+        const sub = event.data.object as Stripe.Subscription;
+        if (await handlePlatformSubscriptionEvent(sub)) break;
+        await applySubscriptionUpdate(sub);
         break;
+      }
 
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -217,6 +281,16 @@ export async function POST(req: NextRequest) {
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         const supabase = createAdminClient() as any;
+        const gym = await findGymByPlatformSubscription(supabase, sub.id);
+        if (gym) {
+          await applyPlatformSubscriptionStatus(
+            supabase,
+            gym.id,
+            "canceled",
+            sub.items.data[0]?.current_period_end,
+          );
+          break;
+        }
         await supabase
           .from("memberships")
           .update({ status: "canceled", cancel_at_period_end: false })

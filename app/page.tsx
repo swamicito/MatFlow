@@ -270,7 +270,7 @@ export default function LandingPage() {
           <div className="relative rounded-2xl overflow-hidden border border-[#1f1f1f] shadow-2xl shadow-black/80 bg-[#0a0a0a]">
             <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
               <iframe
-                src={`https://www.youtube.com/embed/${VSL_VIDEO_ID}?rel=0&modestbranding=1&color=white`}
+                src={`https://www.youtube.com/embed/${VSL_VIDEO_ID}?rel=0&modestbranding=1&color=white&cc_load_policy=3`}
                 title="MatFlow Demo Video"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen

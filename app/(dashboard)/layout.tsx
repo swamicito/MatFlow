@@ -12,6 +12,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentRole } from "@/lib/auth/current-role";
 import { getCurrentGymId, listUserGyms, type GymContext } from "@/lib/auth/current-gym";
 import { GymSelectButton } from "@/components/layout/gym-select-button";
+import { getPlatformGate } from "@/lib/platform/billing";
+import { GraceBanner, LockedScreen } from "@/components/layout/platform-gate";
 
 /**
  * Looks up whether the currently authenticated Supabase user is also linked
@@ -143,10 +145,22 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
+  // ── Platform billing gate ──────────────────────────────────────────────────
+  // Server-side enforcement for EVERY dashboard page: a locked gym never sees
+  // its data screens, regardless of which route was hit. The LockedScreen
+  // itself carries the billing-portal + support actions, so there is no
+  // separate "allowed while locked" route to maintain. The student portal
+  // (/portal) is outside this layout and is deliberately not gated.
+  const gate = await getPlatformGate(gymId);
+  if (gate.state === "locked") {
+    return <LockedScreen status={gate.status} />;
+  }
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar role={role} />
       <div className="flex-1 flex flex-col min-w-0">
+        {gate.state === "grace" && <GraceBanner daysLeft={gate.daysLeft} />}
         <Topbar role={role} gyms={gyms} activeGymId={gymId} studentId={studentId} userEmail={user.email ?? null} />
         <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>

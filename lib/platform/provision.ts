@@ -428,11 +428,16 @@ export async function provisionPlatformGym(input: ProvisionInput): Promise<Provi
   const { data: gym, error: gymErr } = await supabase
     .from("gyms")
     .insert({
-      name:                   input.gymName.trim(),
+      name:                            input.gymName.trim(),
       slug,
-      timezone:               "America/New_York",
-      free_class_nudge_after: 3,
-      onboarding_completed:   false,
+      timezone:                        "America/New_York",
+      free_class_nudge_after:          3,
+      onboarding_completed:            false,
+      // Platform billing: the checkout session starts in trial, so record the
+      // subscription now — the webhook updates status from here on.
+      platform_subscription_status:    "trialing",
+      platform_stripe_subscription_id: input.stripeSubscriptionId,
+      platform_stripe_customer_id:     input.stripeCustomerId,
     })
     .select("id")
     .single();

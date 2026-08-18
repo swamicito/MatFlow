@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, ShieldCheck, UserCircle2 } from "lucide-react";
+import { Lock, Mail, ShieldCheck, UserCircle2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -13,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  inviteTeamMember,
   setMemberRole,
   type TeamMember,
 } from "@/app/(dashboard)/settings/team/actions";
@@ -58,6 +61,8 @@ export function TeamClient({
           </p>
         </div>
       </header>
+
+      {canManage && <InviteForm />}
 
       <RoleLegend />
 
@@ -209,6 +214,95 @@ function MemberRow({
         </span>
       )}
     </li>
+  );
+}
+
+// ─────────────────── Invite form ───────────────────
+
+function InviteForm() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<UserRole>("instructor");
+
+  function submit() {
+    if (!email.trim()) {
+      toast.error("Enter an email address.");
+      return;
+    }
+    startTransition(async () => {
+      const r = await inviteTeamMember(email, role, name || undefined);
+      if (!r.ok) {
+        toast.error("Invite failed", { description: r.error });
+        return;
+      }
+      toast.success(
+        r.emailed
+          ? `Invite sent to ${email.trim().toLowerCase()}`
+          : `Added ${email.trim().toLowerCase()} — they can log in at /login with their email`,
+      );
+      setEmail("");
+      setName("");
+      setRole("instructor");
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="bg-[#0a0a0a] border-[#1f1f1f] shadow-none">
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <UserPlus className="h-4 w-4 text-[#888]" />
+          <p className="text-[10px] uppercase tracking-widest text-[#666]">
+            Invite member
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_180px_auto] gap-3">
+          <Input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="bg-black border-[#222] text-white"
+          />
+          <Input
+            placeholder="Name (optional)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-black border-[#222] text-white"
+          />
+          <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+            <SelectTrigger className="bg-black border-[#222] text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#0a0a0a] border-[#1f1f1f] text-white">
+              {assignableRoles("owner").map((r) => (
+                <SelectItem
+                  key={r}
+                  value={r}
+                  className="focus:bg-[#111] focus:text-white"
+                >
+                  {ROLE_LABEL[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={submit}
+            disabled={pending}
+            className="bg-white text-black hover:bg-white/90"
+          >
+            <Mail className="h-4 w-4 mr-1.5" />
+            {pending ? "Inviting…" : "Invite"}
+          </Button>
+        </div>
+        <p className="text-xs text-[#555]">
+          They&apos;ll get an email with a sign-in link for this gym only. No
+          password needed.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

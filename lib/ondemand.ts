@@ -84,6 +84,9 @@ export function getEmbedUrl(
     const params = new URLSearchParams({
       rel: "0",
       modestbranding: "1",
+      // 3 = captions off by default — most uploads have burned-in captions,
+      // and a YouTube CC overlay on top renders as double subtitles.
+      cc_load_policy: "3",
       ...(startSeconds > 0 ? { start: String(Math.round(startSeconds)) } : {}),
     });
     return `https://www.youtube.com/embed/${id}?${params}`;
