@@ -10,12 +10,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // gets the same cached return value (true/false) at no extra DB cost.
 async function getUnreadMessageCount(studentId: string): Promise<number> {
   try {
-    const admin = createAdminClient() as any;
+    const admin = createAdminClient();
     const { data: parts } = await admin
       .from("conversation_participants")
       .select("conversation_id")
       .eq("student_id", studentId);
-    const convIds = (parts ?? []).map((p: any) => p.conversation_id);
+    const convIds = (parts ?? []).map(
+      (p: { conversation_id: string }) => p.conversation_id,
+    );
     if (convIds.length === 0) return 0;
     const { count } = await admin
       .from("messages")
