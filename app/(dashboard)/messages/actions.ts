@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/current-role";
 import { isPlatformAdmin } from "@/lib/auth/platform-admin";
+import { notifyStudentsOfOwnerMessage } from "@/lib/messaging/notify-student";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -204,6 +205,16 @@ export async function createConversation(
 
   if (msgErr) return { ok: false, error: msgErr.message };
 
+  // Notify participants (email/SMS, debounced). Fire-and-forget — a
+  // notification failure must never fail the send itself.
+  notifyStudentsOfOwnerMessage({
+    conversationId: convId,
+    gymId,
+    content: firstMessage.trim(),
+  }).catch((err) =>
+    console.error(`[messaging] notify failed conversation=${convId}:`, err),
+  );
+
   revalidatePath("/messages");
   return { ok: true, id: convId };
 }
@@ -238,6 +249,15 @@ export async function sendOwnerMessage(
   });
 
   if (error) return { ok: false, error: error.message };
+
+  // Notify participants (email/SMS, debounced). Fire-and-forget.
+  notifyStudentsOfOwnerMessage({
+    conversationId,
+    gymId,
+    content: content.trim(),
+  }).catch((err) =>
+    console.error(`[messaging] notify failed conversation=${conversationId}:`, err),
+  );
 
   revalidatePath(`/messages/${conversationId}`);
   revalidatePath("/messages");

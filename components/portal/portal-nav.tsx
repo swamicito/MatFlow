@@ -13,7 +13,7 @@ const NAV = [
   { href: "/portal/membership", label: "Billing", icon: CreditCard },
 ];
 
-export function PortalNav() {
+export function PortalNav({ unreadMessages = 0 }: { unreadMessages?: number }) {
   const pathname = usePathname();
 
   return (
@@ -23,6 +23,7 @@ export function PortalNav() {
           const active = href === "/portal"
             ? pathname === "/portal"
             : pathname === href || pathname.startsWith(href + "/");
+          const showBadge = href === "/portal/messages" && unreadMessages > 0;
           return (
             <Link
               key={href}
@@ -32,12 +33,19 @@ export function PortalNav() {
                 active ? "text-white" : "text-[#9CA3AF]"
               )}
             >
-              <Icon 
-                className={cn(
-                  "h-5 w-5 mb-0.5 transition-all",
-                  active && "scale-110 text-white"
-                )} 
-              />
+              <span className="relative">
+                <Icon
+                  className={cn(
+                    "h-5 w-5 mb-0.5 transition-all",
+                    active && "scale-110 text-white"
+                  )}
+                />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 inline-flex items-center justify-center h-4 min-w-[16px] bg-white text-black text-[9px] font-bold rounded-full px-1">
+                    {unreadMessages > 99 ? "99+" : unreadMessages}
+                  </span>
+                )}
+              </span>
               <span className="text-[9px] font-medium tracking-wide">{label}</span>
             </Link>
           );
