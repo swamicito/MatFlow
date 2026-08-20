@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
-import { getStripe, isStripeConfigured } from "@/lib/stripe";
+import { requireConnectedGym } from "@/lib/stripe-connect";
 import { getCurrentRole } from "@/lib/auth/current-role";
 import { can } from "@/lib/permissions";
 import { INSTRUCTIONAL_CATEGORIES, type InstructionalCategory } from "@/lib/ondemand";
@@ -106,10 +106,7 @@ export async function updateInstructional(
   if (input.title !== undefined) patch.title = input.title.trim();
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
   if (input.category !== undefined) patch.category = input.category;
-  if (input.price_cents !== undefined) {
-    patch.price_cents = Math.round(input.price_cents);
-    patch.stripe_price_id = null; // invalidate cached Stripe Price
-  }
+  if (input.price_cents !== undefined) patch.price_cents = Math.round(input.price_cents);
   if (input.duration_seconds !== undefined) patch.duration_seconds = input.duration_seconds ?? null;
   if (input.video_url !== undefined) patch.video_url = input.video_url.trim();
   if (input.thumbnail_url !== undefined) patch.thumbnail_url = input.thumbnail_url?.trim() || null;
@@ -158,55 +155,10 @@ export async function listInstructionals(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stripe: ensure one-time Price for an instructional
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function ensureInstructionalStripe(
-  supabase: any,
-  instructionalId: string,
-): Promise<{ ok: true; priceId: string } | { ok: false; error: string }> {
-  const { data: inst } = await supabase
-    .from("instructionals")
-    .select("*")
-    .eq("id", instructionalId)
-    .maybeSingle();
-  if (!inst) return { ok: false, error: "Instructional not found." };
-  if (inst.stripe_price_id) return { ok: true, priceId: inst.stripe_price_id };
-
-  const stripe = getStripe();
-  if (!stripe) return { ok: false, error: "Stripe not configured." };
-
-  try {
-    let spId = inst.stripe_product_id;
-    if (!spId) {
-      const sp = await stripe.products.create({
-        name: inst.title,
-        description: inst.description ?? undefined,
-        metadata: {
-          matflow_instructional_id: inst.id,
-          matflow_gym_id: inst.gym_id,
-        },
-      });
-      spId = sp.id;
-    }
-    const price = await stripe.prices.create({
-      product: spId,
-      currency: "usd",
-      unit_amount: inst.price_cents,
-      metadata: { matflow_instructional_id: inst.id },
-    });
-    await supabase
-      .from("instructionals")
-      .update({ stripe_product_id: spId, stripe_price_id: price.id })
-      .eq("id", inst.id);
-    return { ok: true, priceId: price.id };
-  } catch (e) {
-    return { ok: false, error: stripeErr(e) };
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Checkout Session for an instructional purchase
+// Checkout Session for an instructional purchase — charges the gym's
+// CONNECTED account (direct charge via stripeAccount), never the MatFlow
+// platform account. The line item is built inline (price_data), so no
+// platform-side Price cache is needed.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createInstructionalCheckout(
@@ -248,27 +200,38 @@ export async function createInstructionalCheckout(
   if (!student.email)
     return { ok: false, error: "Student needs an email address to checkout." };
 
-  if (!isStripeConfigured())
-    return {
-      ok: false,
-      error:
-        "STRIPE_NOT_CONFIGURED — add STRIPE_SECRET_KEY to enable online purchases.",
-    };
+  const gymId = inst.gym_id as string;
 
-  const priceResult = await ensureInstructionalStripe(supabase, instructionalId);
-  if (!priceResult.ok) return priceResult;
-
-  const stripe = getStripe()!;
+  const conn = await requireConnectedGym(gymId);
+  if (!conn.ok) {
+    // Clear, actionable message — never fail silently.
+    return { ok: false, error: conn.error };
+  }
+  const { gym, stripe } = conn;
+  const opts = { stripeAccount: gym.stripe_account_id };
 
   try {
     let customerId = student.stripe_customer_id;
+    if (customerId) {
+      // Stale ids happen when a gym reconnects Stripe — verify on the
+      // connected account and recreate if missing.
+      try {
+        const existing = await stripe.customers.retrieve(customerId, {}, opts);
+        if ((existing as any).deleted) customerId = null;
+      } catch {
+        customerId = null;
+      }
+    }
     if (!customerId) {
-      const cust = await stripe.customers.create({
-        name: student.full_name,
-        email: student.email,
-        phone: student.phone ?? undefined,
-        metadata: { matflow_student_id: student.id },
-      });
+      const cust = await stripe.customers.create(
+        {
+          name: student.full_name,
+          email: student.email,
+          phone: student.phone ?? undefined,
+          metadata: { matflow_student_id: student.id, matflow_gym_id: gymId },
+        },
+        opts,
+      );
       customerId = cust.id;
       await supabase
         .from("students")
@@ -276,26 +239,39 @@ export async function createInstructionalCheckout(
         .eq("id", student.id);
     }
 
-    const gymId = await getCurrentGymId();
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "payment",
-      line_items: [{ price: priceResult.priceId, quantity: 1 }],
-      success_url: `${successUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl,
-      metadata: {
-        matflow_purchase_type: "instructional",
-        matflow_student_id: studentId,
-        matflow_instructional_id: instructionalId,
-        matflow_gym_id: gymId ?? "",
+    const session = await stripe.checkout.sessions.create(
+      {
+        customer: customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: inst.price_cents,
+              product_data: {
+                name: inst.title,
+                ...(inst.thumbnail_url ? { images: [inst.thumbnail_url] } : {}),
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${successUrl}${successUrl.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl,
+        metadata: {
+          matflow_purchase_type: "instructional",
+          matflow_student_id: studentId,
+          matflow_instructional_id: instructionalId,
+          matflow_gym_id: gymId,
+        },
       },
-    });
+      opts,
+    );
 
     // Pending row — matched by webhook
     await supabase.from("instructional_purchases").upsert(
       {
-        gym_id: gymId ?? inst.gym_id,
+        gym_id: gymId,
         student_id: studentId,
         instructional_id: instructionalId,
         amount_cents: inst.price_cents,

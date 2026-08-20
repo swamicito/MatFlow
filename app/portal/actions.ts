@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentStudentIdentity } from "@/lib/auth/current-student";
 import { waiverTypeLabel } from "@/lib/students";
+import { requireConnectedGym } from "@/lib/stripe-connect";
+import { creditsForProduct, expiresAt, type ProductType } from "@/lib/shop";
 import type { BeltRank } from "@/lib/supabase/types";
 
 // ─────────────────────────────────────────────
@@ -100,6 +102,7 @@ export type PortalProduct = {
   class_credits: number;
   validity_days: number | null;
   stripe_price_id: string | null;
+  image_url: string | null;
 };
 
 // ─────────────────────────────────────────────
@@ -318,11 +321,26 @@ export async function getGymProducts(
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("products")
-    .select("id, name, description, product_type, price_cents, class_credits, validity_days, stripe_price_id")
+    .select("id, name, description, product_type, price_cents, class_credits, validity_days, stripe_price_id, image_url")
     .eq("gym_id", gymId)
     .eq("visible", true)
     .order("sort_order", { ascending: true });
   return (data ?? []) as PortalProduct[];
+}
+
+/**
+ * Whether the student's gym can accept online payments right now.
+ * Drives the "Payments not set up" state in the portal — a gym without a
+ * charges-enabled Connect account must NOT present buy buttons.
+ */
+export async function getGymPaymentsReady(gymId: string): Promise<boolean> {
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("gyms")
+    .select("stripe_account_id, stripe_charges_enabled")
+    .eq("id", gymId)
+    .maybeSingle();
+  return !!(data?.stripe_account_id && data?.stripe_charges_enabled);
 }
 
 // ─────────────────────────────────────────────
@@ -400,54 +418,306 @@ export async function createProductCheckout(
   const admin = createAdminClient() as any;
 
   const [{ data: student }, { data: product }] = await Promise.all([
-    admin.from("students").select("stripe_customer_id, gym_id").eq("id", studentId).maybeSingle(),
-    admin.from("products").select("id, name, stripe_price_id, price_cents, gym_id").eq("id", productId).maybeSingle(),
+    admin.from("students").select("id, full_name, email, phone, stripe_customer_id, gym_id").eq("id", studentId).maybeSingle(),
+    admin.from("products").select("*").eq("id", productId).maybeSingle(),
   ]);
 
   if (!product) return { ok: false, error: "Product not found." };
+  if (!product.visible) return { ok: false, error: "This product is not available." };
+  if (product.price_cents <= 0) return { ok: false, error: "This product is free — no checkout needed." };
+  if (!student?.email) return { ok: false, error: "Add an email address to your profile to check out." };
 
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeSecretKey) return { ok: false, error: "Billing is not configured." };
-  if (!product.stripe_price_id) return { ok: false, error: "This product is not available for online purchase. Ask your gym to set it up." };
-
-  const { data: gym } = await admin
-    .from("gyms")
-    .select("stripe_account_id")
-    .eq("id", product.gym_id)
-    .maybeSingle();
+  // Charge the gym's CONNECTED account (direct charge) — never the platform.
+  const gymId = product.gym_id as string;
+  const conn = await requireConnectedGym(gymId);
+  if (!conn.ok) {
+    return {
+      ok: false,
+      error: "Online payments aren't set up at this gym yet — ask your coach to connect Stripe in Settings → Payments.",
+    };
+  }
+  const { gym, stripe } = conn;
+  const opts = { stripeAccount: gym.stripe_account_id };
 
   try {
-    const params = new URLSearchParams({
-      mode: "payment",
-      "line_items[0][price]": product.stripe_price_id,
-      "line_items[0][quantity]": "1",
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      ...(student?.stripe_customer_id ? { customer: student.stripe_customer_id } : {}),
-      "metadata[student_id]": studentId,
-      "metadata[product_id]": productId,
-    });
-
-    const resp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${stripeSecretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        ...(gym?.stripe_account_id ? { "Stripe-Account": gym.stripe_account_id } : {}),
-      },
-      body: params.toString(),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      return { ok: false, error: err?.error?.message ?? "Failed to create checkout." };
+    let customerId = student.stripe_customer_id;
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId, {}, opts);
+        if ((existing as any).deleted) customerId = null;
+      } catch {
+        customerId = null;
+      }
+    }
+    if (!customerId) {
+      const cust = await stripe.customers.create(
+        {
+          name: student.full_name,
+          email: student.email,
+          phone: student.phone ?? undefined,
+          metadata: { matflow_student_id: student.id, matflow_gym_id: gymId },
+        },
+        opts,
+      );
+      customerId = cust.id;
+      await admin
+        .from("students")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", student.id);
     }
 
-    const session = await resp.json();
-    return { ok: true, url: session.url };
+    const session = await stripe.checkout.sessions.create(
+      {
+        customer: customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: product.price_cents,
+              product_data: {
+                name: product.name,
+                ...(product.image_url ? { images: [product.image_url] } : {}),
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${successUrl}${successUrl.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl,
+        metadata: {
+          matflow_purchase_type: "product",
+          matflow_student_id: studentId,
+          matflow_product_id: productId,
+          matflow_gym_id: gymId,
+          quantity: "1",
+        },
+      },
+      opts,
+    );
+
+    // Pending purchase row — the webhook matches on stripe_checkout_session_id
+    // and flips it to paid. Without this row the student would pay and get
+    // nothing.
+    const creditsGranted = creditsForProduct(
+      product.product_type as ProductType,
+      product.class_credits,
+      1,
+    );
+    const expiry = expiresAt(new Date(), product.validity_days);
+
+    await admin.from("purchases").insert({
+      gym_id: gymId,
+      student_id: studentId,
+      product_id: productId,
+      quantity: 1,
+      amount_cents: product.price_cents,
+      status: "pending",
+      stripe_checkout_session_id: session.id,
+      credits_granted: creditsGranted,
+      expires_at: expiry?.toISOString() ?? null,
+    });
+
+    return { ok: true, url: session.url! };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "Unknown error." };
   }
+}
+
+// ─────────────────────────────────────────────
+// Stripe checkout for an instructional (video) purchase from the portal
+// ─────────────────────────────────────────────
+
+export async function createInstructionalCheckoutPortal(
+  studentId: string,
+  instructionalId: string,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const admin = createAdminClient() as any;
+
+  const [{ data: student }, { data: inst }] = await Promise.all([
+    admin.from("students").select("id, full_name, email, phone, stripe_customer_id, gym_id").eq("id", studentId).maybeSingle(),
+    admin.from("instructionals").select("*").eq("id", instructionalId).maybeSingle(),
+  ]);
+
+  if (!inst) return { ok: false, error: "Video not found." };
+  if (!inst.published_at) return { ok: false, error: "This video is not available." };
+  if (!student) return { ok: false, error: "Student not found." };
+  // Gym-scoped: the student can only buy videos from their own gym.
+  if (inst.gym_id !== student.gym_id) return { ok: false, error: "Video not found." };
+  if (inst.is_free || inst.price_cents <= 0) return { ok: false, error: "This video is free — just watch it." };
+  if (!student.email) return { ok: false, error: "Add an email address to your profile to check out." };
+
+  // Already owned?
+  const { data: existing } = await admin
+    .from("instructional_purchases")
+    .select("id, status")
+    .eq("student_id", studentId)
+    .eq("instructional_id", instructionalId)
+    .maybeSingle();
+  if (existing && (existing.status === "paid" || existing.status === "free"))
+    return { ok: false, error: "You already own this video." };
+
+  const gymId = student.gym_id as string;
+  const conn = await requireConnectedGym(gymId);
+  if (!conn.ok) {
+    return {
+      ok: false,
+      error: "Online payments aren't set up at this gym yet — ask your coach to connect Stripe in Settings → Payments.",
+    };
+  }
+  const { gym, stripe } = conn;
+  const opts = { stripeAccount: gym.stripe_account_id };
+
+  try {
+    let customerId = student.stripe_customer_id;
+    if (customerId) {
+      try {
+        const ex = await stripe.customers.retrieve(customerId, {}, opts);
+        if ((ex as any).deleted) customerId = null;
+      } catch {
+        customerId = null;
+      }
+    }
+    if (!customerId) {
+      const cust = await stripe.customers.create(
+        {
+          name: student.full_name,
+          email: student.email,
+          phone: student.phone ?? undefined,
+          metadata: { matflow_student_id: student.id, matflow_gym_id: gymId },
+        },
+        opts,
+      );
+      customerId = cust.id;
+      await admin
+        .from("students")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", student.id);
+    }
+
+    const session = await stripe.checkout.sessions.create(
+      {
+        customer: customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: inst.price_cents,
+              product_data: {
+                name: inst.title,
+                ...(inst.thumbnail_url ? { images: [inst.thumbnail_url] } : {}),
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${successUrl}${successUrl.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl,
+        metadata: {
+          matflow_purchase_type: "instructional",
+          matflow_student_id: studentId,
+          matflow_instructional_id: instructionalId,
+          matflow_gym_id: gymId,
+        },
+      },
+      opts,
+    );
+
+    // Pending row — the webhook flips it to paid and grants access.
+    await admin.from("instructional_purchases").upsert(
+      {
+        gym_id: gymId,
+        student_id: studentId,
+        instructional_id: instructionalId,
+        amount_cents: inst.price_cents,
+        status: "pending",
+        stripe_checkout_session_id: session.id,
+      },
+      { onConflict: "student_id,instructional_id" },
+    );
+
+    return { ok: true, url: session.url! };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Unknown error." };
+  }
+}
+
+// ─────────────────────────────────────────────
+// Videos a student can BUY (published, not yet owned) — for the portal browse section
+// ─────────────────────────────────────────────
+
+export type PortalPurchasableVideo = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  duration_seconds: number | null;
+  thumbnail_url: string | null;
+  price_cents: number;
+  is_free: boolean;
+};
+
+export async function getPurchasableVideos(studentId: string): Promise<PortalPurchasableVideo[]> {
+  const admin = createAdminClient() as any;
+
+  const { data: student } = await admin
+    .from("students")
+    .select("gym_id")
+    .eq("id", studentId)
+    .maybeSingle();
+  if (!student?.gym_id) return [];
+
+  const [instRes, ownedRes] = await Promise.all([
+    admin
+      .from("instructionals")
+      .select("id, title, description, category, duration_seconds, thumbnail_url, price_cents, is_free")
+      .eq("gym_id", student.gym_id)
+      .not("published_at", "is", null)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false }),
+    admin
+      .from("instructional_purchases")
+      .select("instructional_id")
+      .eq("student_id", studentId)
+      .in("status", ["paid", "free", "pending"]),
+  ]);
+
+  const owned = new Set((ownedRes.data ?? []).map((r: any) => r.instructional_id));
+  return (instRes.data ?? []).filter((v: any) => !owned.has(v.id));
+}
+
+/** Instant (no-Stripe) access for $0 videos. */
+export async function claimFreeVideo(
+  studentId: string,
+  instructionalId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = createAdminClient() as any;
+
+  const [{ data: student }, { data: inst }] = await Promise.all([
+    admin.from("students").select("gym_id").eq("id", studentId).maybeSingle(),
+    admin.from("instructionals").select("id, gym_id, is_free, price_cents, published_at").eq("id", instructionalId).maybeSingle(),
+  ]);
+
+  if (!student || !inst || inst.gym_id !== student.gym_id) return { ok: false, error: "Video not found." };
+  if (!inst.is_free && inst.price_cents > 0) return { ok: false, error: "This video is paid." };
+
+  const { error } = await admin.from("instructional_purchases").upsert(
+    {
+      gym_id: student.gym_id,
+      student_id: studentId,
+      instructional_id: instructionalId,
+      amount_cents: 0,
+      status: "free",
+    },
+    { onConflict: "student_id,instructional_id" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/videos");
+  return { ok: true };
 }
 
 // ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CreditCard,
   Gift,
@@ -13,6 +13,7 @@ import {
   Loader2,
   Package,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -63,13 +64,20 @@ export function ShopClient({
   purchases,
   memberships,
   products,
+  paymentsReady,
 }: {
   studentId: string;
   credits: PortalCredits;
   purchases: PortalPurchase[];
   memberships: PortalMembership[];
   products: PortalProduct[];
+  paymentsReady: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const justPaid =
+    searchParams.get("success") === "1" ||
+    searchParams.get("checkout") === "success";
+
   const activeMembership = memberships.find(
     (m) => m.status === "active" || m.status === "trialing",
   );
@@ -77,6 +85,21 @@ export function ShopClient({
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold tracking-tight">Shop</h1>
+
+      {/* ── Post-checkout confirmation ── */}
+      {justPaid && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-emerald-200">
+              Payment successful
+            </p>
+            <p className="text-xs text-emerald-300/70">
+              Your purchase will show in your history below in a few seconds.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Balance row ── */}
       <div className="grid grid-cols-2 gap-3">
@@ -112,12 +135,27 @@ export function ShopClient({
       {products.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-white">Available to Buy</h2>
+          {!paymentsReady && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-200">
+                  Online payments aren&apos;t set up yet
+                </p>
+                <p className="text-xs text-amber-300/70">
+                  Your gym hasn&apos;t connected Stripe. Ask a coach to finish
+                  setup in Settings → Payments to enable online purchases.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             {products.map((p) => (
               <ProductCard
                 key={p.id}
                 product={p}
                 studentId={studentId}
+                paymentsReady={paymentsReady}
               />
             ))}
           </div>
@@ -294,9 +332,11 @@ function MembershipCard({
 function ProductCard({
   product,
   studentId,
+  paymentsReady,
 }: {
   product: PortalProduct;
   studentId: string;
+  paymentsReady: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -322,10 +362,21 @@ function ProductCard({
 
   return (
     <div className="rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] p-4 flex items-center gap-4">
-      {/* Icon */}
-      <div className="h-10 w-10 grid place-items-center rounded-lg border border-[#222] bg-black shrink-0">
-        <Package className="h-5 w-5 text-[#555]" />
-      </div>
+      {/* Image / icon */}
+      {product.image_url ? (
+        <div className="h-14 w-14 rounded-lg overflow-hidden bg-black border border-[#222] shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="h-10 w-10 grid place-items-center rounded-lg border border-[#222] bg-black shrink-0">
+          <Package className="h-5 w-5 text-[#555]" />
+        </div>
+      )}
 
       {/* Info */}
       <div className="flex-1 min-w-0 space-y-0.5">
@@ -357,7 +408,9 @@ function ProductCard({
         <p className="text-base font-bold text-white">
           {product.price_cents === 0 ? "Free" : formatCents(product.price_cents)}
         </p>
-        {product.stripe_price_id ? (
+        {product.price_cents === 0 ? (
+          <span className="text-[10px] text-[#666]">Free at the gym</span>
+        ) : paymentsReady ? (
           <button
             onClick={handleBuy}
             disabled={pending}
@@ -373,7 +426,7 @@ function ProductCard({
             )}
           </button>
         ) : (
-          <span className="text-[10px] text-[#444]">Ask your coach</span>
+          <span className="text-[10px] text-amber-400/80">Payments not set up</span>
         )}
       </div>
     </div>

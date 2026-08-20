@@ -948,6 +948,7 @@ export type Database = {
           description: string | null
           gym_id: string
           id: string
+          image_url: string | null
           max_quantity: number | null
           name: string
           original_price_cents: number | null
@@ -967,6 +968,7 @@ export type Database = {
           description?: string | null
           gym_id: string
           id?: string
+          image_url?: string | null
           max_quantity?: number | null
           name: string
           original_price_cents?: number | null
@@ -986,6 +988,7 @@ export type Database = {
           description?: string | null
           gym_id?: string
           id?: string
+          image_url?: string | null
           max_quantity?: number | null
           name?: string
           original_price_cents?: number | null

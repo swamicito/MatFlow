@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { getCurrentStudentIdentity } from "@/lib/auth/current-student";
-import { getPortalDashboard } from "../actions";
+import {
+  getPortalDashboard,
+  getPurchasableVideos,
+  getGymPaymentsReady,
+} from "../actions";
+import { VideoStore } from "@/components/portal/video-store";
 import { Play, CheckCircle2, Clock } from "lucide-react";
 import { formatDuration } from "@/lib/portal-utils";
 
@@ -14,6 +20,11 @@ export default async function VideosPage() {
   if (!data) redirect("/login?error=no_student");
 
   const { instructionals } = data;
+
+  const [purchasable, paymentsReady] = await Promise.all([
+    getPurchasableVideos(identity.studentId),
+    getGymPaymentsReady(data.student.gym_id),
+  ]);
 
   const inProgress = instructionals.filter((v) => v.position_seconds > 0 && !v.completed);
   const completed = instructionals.filter((v) => v.completed);
@@ -54,6 +65,16 @@ export default async function VideosPage() {
             </section>
           )}
         </div>
+      )}
+
+      {purchasable.length > 0 && (
+        <Suspense fallback={null}>
+          <VideoStore
+            studentId={identity.studentId}
+            videos={purchasable}
+            paymentsReady={paymentsReady}
+          />
+        </Suspense>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { getCurrentStudentIdentity } from "@/lib/auth/current-student";
-import { getPortalDashboard, getGymProducts } from "../actions";
+import { getPortalDashboard, getGymProducts, getGymPaymentsReady } from "../actions";
 import { ShopClient } from "@/components/portal/shop-client";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +17,16 @@ export default async function ShopPage() {
         purchases={[]}
         memberships={[]}
         products={[]}
+        paymentsReady={false}
       />
     );
   }
 
   const data = await getPortalDashboard(identity.studentId);
-  const products = data ? await getGymProducts(data.student.gym_id) : [];
+  const gymId = data?.student.gym_id;
+  const [products, paymentsReady] = gymId
+    ? await Promise.all([getGymProducts(gymId), getGymPaymentsReady(gymId)])
+    : [[], false];
 
   return (
     <ShopClient
@@ -31,6 +35,7 @@ export default async function ShopPage() {
       purchases={data?.purchases ?? []}
       memberships={data?.memberships ?? []}
       products={products}
+      paymentsReady={paymentsReady}
     />
   );
 }

@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentGymId } from "@/lib/auth/current-gym";
-import { getStripe, isStripeConfigured } from "@/lib/stripe";
+import { requireConnectedGym } from "@/lib/stripe-connect";
 import { getCurrentRole } from "@/lib/auth/current-role";
 import { can } from "@/lib/permissions";
 import {
@@ -46,6 +46,7 @@ export type ProductInput = {
   special_start_date?: string | null;
   special_end_date?: string | null;
   sort_order?: number;
+  image_url?: string | null;
 };
 
 function validateProduct(input: ProductInput): string | null {
@@ -97,6 +98,7 @@ export async function createProduct(
       special_start_date: input.special_start_date ?? null,
       special_end_date: input.special_end_date ?? null,
       sort_order: input.sort_order ?? 0,
+      image_url: input.image_url ?? null,
     })
     .select("id")
     .single();
@@ -131,9 +133,7 @@ export async function updateProduct(
   if (input.special_start_date !== undefined) patch.special_start_date = input.special_start_date ?? null;
   if (input.special_end_date !== undefined) patch.special_end_date = input.special_end_date ?? null;
   if (input.sort_order !== undefined) patch.sort_order = input.sort_order;
-
-  // If price changed, invalidate the cached Stripe Price.
-  if (input.price_cents !== undefined) patch.stripe_price_id = null;
+  if (input.image_url !== undefined) patch.image_url = input.image_url ?? null;
 
   const { error } = await supabase.from("products").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -241,52 +241,8 @@ export async function getSalesStats(): Promise<ActionResult<SalesStats>> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stripe: ensure one-time Price exists for a product
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function ensureProductStripe(
-  supabase: any,
-  productId: string,
-): Promise<{ ok: true; priceId: string } | { ok: false; error: string }> {
-  const { data: p } = await supabase
-    .from("products")
-    .select("*")
-    .eq("id", productId)
-    .maybeSingle();
-  if (!p) return { ok: false, error: "Product not found." };
-  if (p.stripe_price_id) return { ok: true, priceId: p.stripe_price_id };
-
-  const stripe = getStripe();
-  if (!stripe) return { ok: false, error: "Stripe not configured." };
-
-  try {
-    let stripeProductId = p.stripe_product_id;
-    if (!stripeProductId) {
-      const sp = await stripe.products.create({
-        name: p.name,
-        description: p.description ?? undefined,
-        metadata: { matflow_product_id: p.id, matflow_gym_id: p.gym_id },
-      });
-      stripeProductId = sp.id;
-    }
-    const price = await stripe.prices.create({
-      product: stripeProductId,
-      currency: "usd",
-      unit_amount: p.price_cents,
-      metadata: { matflow_product_id: p.id },
-    });
-    await supabase
-      .from("products")
-      .update({ stripe_product_id: stripeProductId, stripe_price_id: price.id })
-      .eq("id", p.id);
-    return { ok: true, priceId: price.id };
-  } catch (e) {
-    return { ok: false, error: stripeErr(e) };
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Create Stripe Checkout Session
+// Create Stripe Checkout Session — charges the gym's CONNECTED account
+// (direct charge via stripeAccount), never the MatFlow platform account.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createCheckoutSession(
@@ -319,28 +275,38 @@ export async function createCheckoutSession(
       error: "Student needs an email address to checkout. Add one first.",
     };
 
-  if (!isStripeConfigured()) {
-    return {
-      ok: false,
-      error:
-        "STRIPE_NOT_CONFIGURED — the owner must add STRIPE_SECRET_KEY to enable online purchases.",
-    };
+  const gymId = product.gym_id as string;
+
+  const conn = await requireConnectedGym(gymId);
+  if (!conn.ok) {
+    // Clear, actionable message — never fail silently.
+    return { ok: false, error: conn.error };
   }
-
-  const priceResult = await ensureProductStripe(supabase, productId);
-  if (!priceResult.ok) return priceResult;
-
-  const stripe = getStripe()!;
+  const { gym, stripe } = conn;
+  const opts = { stripeAccount: gym.stripe_account_id };
 
   try {
     let customerId = student.stripe_customer_id;
+    if (customerId) {
+      // Stale ids happen when a gym reconnects Stripe — verify on the
+      // connected account and recreate if missing.
+      try {
+        const existing = await stripe.customers.retrieve(customerId, {}, opts);
+        if ((existing as any).deleted) customerId = null;
+      } catch {
+        customerId = null;
+      }
+    }
     if (!customerId) {
-      const cust = await stripe.customers.create({
-        name: student.full_name,
-        email: student.email,
-        phone: student.phone ?? undefined,
-        metadata: { matflow_student_id: student.id },
-      });
+      const cust = await stripe.customers.create(
+        {
+          name: student.full_name,
+          email: student.email,
+          phone: student.phone ?? undefined,
+          metadata: { matflow_student_id: student.id, matflow_gym_id: gymId },
+        },
+        opts,
+      );
       customerId = cust.id;
       await supabase
         .from("students")
@@ -348,21 +314,34 @@ export async function createCheckoutSession(
         .eq("id", student.id);
     }
 
-    const gymId = await getCurrentGymId();
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "payment",
-      line_items: [{ price: priceResult.priceId, quantity }],
-      success_url: `${successUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl,
-      metadata: {
-        matflow_student_id: studentId,
-        matflow_product_id: productId,
-        matflow_gym_id: gymId ?? "",
-        quantity: String(quantity),
+    const session = await stripe.checkout.sessions.create(
+      {
+        customer: customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: product.price_cents,
+              product_data: {
+                name: product.name,
+                ...(product.image_url ? { images: [product.image_url] } : {}),
+              },
+            },
+            quantity,
+          },
+        ],
+        success_url: `${successUrl}${successUrl.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl,
+        metadata: {
+          matflow_student_id: studentId,
+          matflow_product_id: productId,
+          matflow_gym_id: gymId,
+          quantity: String(quantity),
+        },
       },
-    });
+      opts,
+    );
 
     // Create a pending purchase row so we can match the webhook.
     const creditsGranted = creditsForProduct(
@@ -373,7 +352,7 @@ export async function createCheckoutSession(
     const expiry = expiresAt(new Date(), product.validity_days);
 
     await supabase.from("purchases").insert({
-      gym_id: gymId ?? product.gym_id,
+      gym_id: gymId,
       student_id: studentId,
       product_id: productId,
       quantity,

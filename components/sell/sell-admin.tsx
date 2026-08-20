@@ -69,6 +69,7 @@ const DEFAULT_INPUT: ProductInput = {
   special_start_date: null,
   special_end_date: null,
   sort_order: 0,
+  image_url: null,
 };
 
 export function SellAdmin({
@@ -268,6 +269,12 @@ function ProductCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {p.image_url && (
+              <div className="h-8 w-8 rounded overflow-hidden bg-black border border-[#222] shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+              </div>
+            )}
             <p className="text-white font-medium">{p.name}</p>
             <span className="text-[10px] uppercase tracking-widest border border-[#222] text-[#888] rounded-full px-2 py-0.5">
               {PRODUCT_TYPE_LABEL[p.product_type as ProductType]}
@@ -395,6 +402,7 @@ function ProductDialog({
           special_start_date: initial.special_start_date,
           special_end_date: initial.special_end_date,
           sort_order: initial.sort_order,
+          image_url: initial.image_url,
         }
       : { ...DEFAULT_INPUT },
   );
@@ -607,6 +615,30 @@ function ProductDialog({
               className={inputCls}
               placeholder="Optional — shown to students"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>
+              Image URL <span className="text-[#666]">(optional — merch photo)</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              <Input
+                value={form.image_url ?? ""}
+                onChange={(e) => set("image_url", e.target.value || null)}
+                className={inputCls}
+                placeholder="https://…/rashguard.jpg"
+              />
+              {form.image_url && (
+                <div className="h-10 w-10 rounded-md overflow-hidden bg-black border border-[#222] shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={form.image_url}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
